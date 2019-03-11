@@ -14,3 +14,9 @@
   * However, the implicit modular strucuture of the project will accommodate externally sourced timeseries data for evaluation and visualisation.
 * Key dependencies are Pandas, for data housing, and Flask, for project structure. Additionally, AWS Lambda will be used for multiprocessing requirements.
 * This is an endeavour to produce a polished body of work written in python 3.7. The test of this project will be its ability to evolve with new technologies as they become available.
+
+### Architecture
+
+Stage 1                  | Stage 2                         | Stage 3
+-------------------------|---------------------------------|----------
+Interface with OANDA api | Handle, store and evaluate data | Visualise
