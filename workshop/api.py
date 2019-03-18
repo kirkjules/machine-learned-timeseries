@@ -2,11 +2,9 @@ import os
 import configparser
 import requests
 
-#response = requests.get('https://httpbin.org/ip')
+# response = requests.get('https://httpbin.org/ip')
 
-#print('Your IP is {0}'.format(response.json()['origin']))
-
-
+# print('Your IP is {0}'.format(response.json()['origin']))
 
 config = configparser.ConfigParser()
 
@@ -14,8 +12,8 @@ config.read("config.ini")
 
 key = config["api-fxpractice.oanda.com"]["authtoken"]
 
-header = {"Content-Type": "application/json",
-          "Authorization": "Bearer {0}".format(key)}
+headers = {"Content-Type": "application/json",
+           "Authorization": "Bearer {0}".format(key)}
 
 payload = {"count": "6", "price": "M", "granularity": "S5"}
 
