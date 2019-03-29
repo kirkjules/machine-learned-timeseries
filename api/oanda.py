@@ -15,7 +15,7 @@ class Api:
 
 class Instrument(Api):
 
-    def candles(self, key, instrument, queryParameters):
+    def candles(self, instrument, queryParameters):
         """Request query parameters are: price, granularity, count,
         from, to, smooth, includeFirst, dailyAlignment, alignmentTimezone,
         weeklyAlignment.
@@ -24,14 +24,12 @@ class Instrument(Api):
         """
 
         headers = {"Content-Type": "application/json",
-                   "Authorization": "Bearer {0}".format(key)}
-        ticker = instrument
-        payload = queryParameters
+                   "Authorization": "Bearer {0}".format(self.key)}
         url = "https://api-fxpractice.oanda.com/v3/instruments/{0}/candles?"
 
-        return requests.get(url.format(ticker),
+        return requests.get(url.format(instrument),
                             headers=headers,
-                            params=payload)
+                            params=queryParameters)
 
 
 if __name__ == "__main__":
@@ -39,5 +37,5 @@ if __name__ == "__main__":
     ticker = "EUR_USD"
     arguments = {"count": "6", "price": "M", "granularity": "S5"}
     r = Instrument("api/config.ini")
-    data = r.candles(r.key, ticker, arguments)
+    data = r.candles(ticker, arguments)
     print(data.json())
