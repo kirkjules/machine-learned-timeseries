@@ -7,14 +7,16 @@ class Api:
     def __init__(self, configFile):
 
         config = configparser.ConfigParser()
-        config.read(configFile)
+        with open(configFile, 'r') as f:
+            config.read_file(f)
+        self.sections = config.sections()
         self.key = config["api-fxpractice.oanda.com"]["authtoken"]
 
 
 class Instrument(Api):
 
-    def candles(self, instrument, **kwargs):
-        """Request parameters are: instrument, price, granularity, count,
+    def candles(self, key, instrument, queryParameters):
+        """Request query parameters are: price, granularity, count,
         from, to, smooth, includeFirst, dailyAlignment, alignmentTimezone,
         weeklyAlignment.
         Refer to http://developer.oanda.com/rest-live-v20/instrument-ep/
@@ -22,11 +24,10 @@ class Instrument(Api):
         """
 
         headers = {"Content-Type": "application/json",
-                   "Authorization": "Bearer {0}".format(self.key)}
+                   "Authorization": "Bearer {0}".format(key)}
         ticker = instrument
-        payload = kwargs
-        url = "https://api-fxpractice.oanda.com/v3/instruments/{0}/\
-                candles?"
+        payload = queryParameters
+        url = "https://api-fxpractice.oanda.com/v3/instruments/{0}/candles?"
 
         return requests.get(url.format(ticker),
                             headers=headers,
@@ -35,11 +36,8 @@ class Instrument(Api):
 
 if __name__ == "__main__":
 
-    import os
     ticker = "EUR_USD"
     arguments = {"count": "6", "price": "M", "granularity": "S5"}
-    r = Instrument("config.ini")
-    print(os.listdir())
-    print(r.key)
-    data = r.candles(ticker, arguments)
+    r = Instrument("api/config.ini")
+    data = r.candles(r.key, ticker, arguments)
     print(data.json())
