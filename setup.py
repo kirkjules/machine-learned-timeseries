@@ -9,6 +9,6 @@ setup(
         'Click',
     ],
     entry_points={
-        "console_scripts": ["candles=api.scripts.candles:cli"],
+        "console_scripts": ["candles=api.scripts.candles:clickData"],
     }
 )
