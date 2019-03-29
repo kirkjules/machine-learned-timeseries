@@ -1,12 +1,11 @@
 import click
+from api import oanda
 
 
 @click.command()
 def cli():
     """Example script."""
     click.echo('Hello World!')
-
-    from api import oanda
 
     ticker = "EUR_USD"
     arguments = {"count": "6", "price": "M", "granularity": "S5"}
