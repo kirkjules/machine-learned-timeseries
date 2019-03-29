@@ -35,9 +35,11 @@ class Instrument(Api):
 
 if __name__ == "__main__":
 
+    import os
     ticker = "EUR_USD"
     arguments = {"count": "6", "price": "M", "granularity": "S5"}
     r = Instrument("config.ini")
+    print(os.listdir())
     print(r.key)
     data = r.candles(ticker, arguments)
     print(data.json())
