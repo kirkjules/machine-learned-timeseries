@@ -1,6 +1,3 @@
 #.gitignore
-.README.md.swp
-Pipfile
-Pipfile.lock
 config.ini
 *.swp
