@@ -8,8 +8,7 @@ setup(
     install_requires=[
         'Click',
     ],
-    entry_points='''
-        [console_scripts]
-        candles=api.scripts.candles:cli
-    ''',
+    entry_points={
+        "console_scripts": ["candles=api.scripts.candles:cli"],
+    }
 )
