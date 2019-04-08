@@ -23,10 +23,10 @@ from api import oanda
               return.")
 @click.option("-f", "--from", "from_",
               default="1993-08-18T09:32:13Z",
-              type=click.DateTime(formats="%Y-%m-%dT%H:%M:%SZ"),
+              # type=click.DateTime(formats="%Y-%m-%dT%H:%M:%SZ"),
               help="The start of the time range to fetch candlesticks for.")
 @click.option("--to",
-              type=click.DateTime(formats="%Y-%m-%dT%H:%M:%SZ"),
+              # type=click.DateTime(formats="%Y-%m-%dT%H:%M:%SZ"),
               help="The end of the time range to fetch candlesticks for.")
 @click.option("--smooth",
               default=False,
@@ -71,7 +71,3 @@ def clickData(ticker, price, granularity, count, from_, to, smooth,
     r = oanda.Instrument(cF)
     data = r.candles(ticker, arguments)
     click.echo(data.json())
-
-
-# if __name__ == '__main__':
-#    clickData()
