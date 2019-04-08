@@ -48,7 +48,7 @@ from api import oanda
               default="Friday",
               type=click.STRING,
               help="")
-@click.argument("--ticker")
+@click.argument("ticker")
 @click.argument("cF", type=click.File("rb"))
 def clickData(ticker, price, granularity, count, from_, to, smooth,
               includeFirst, dailyAlignment, alignmentTimezone,
