@@ -42,23 +42,32 @@ from api import oanda
 @click.option("--includefirst",
               default=True,
               type=click.BOOL,
-              help="")
+              help="A flag that controls whether the candlestick that is\
+              covered by the from time should be included in the results.\
+              This flag enables clients to use the timestamp of the last\
+              completed candlestick received to poll for future candlesticks\
+              but avoid receiving the previous candlestick repeatedly.")
 @click.option("--dailyalignment",
               default=17,
               type=click.IntRange(0, 23, clamp=True),
-              help="")
+              help="The hour of the day (in the specified timezone) to use\
+              for granularities that have daily alignments.")
 @click.option("--weeklyalignment",
               default="Friday",
               type=click.STRING,
-              help="")
+              help="The day of the week used for granularities that have\
+              weekly alignment.")
 @click.option("--alignmenttimezone",
               default="America/New_York",
               type=click.STRING,
-              help="")
+              help="The timezone to use for the dailyAlignment parameter.\
+              Candlesticks with daily alignment will be aligned to the\
+              dailyAlignment hour within the alignmentTimezone. Note that\
+              the returned times will still be represented in UTC.")
 def clickData(cf, ticker, price, granularity, count, from_, to, smooth,
               includefirst, dailyalignment, weeklyalignment,
               alignmenttimezone):
-    click.echo(ticker)
+
     arguments = {"price": price,
                  "granularity": granularity,
                  "count": count,
@@ -69,12 +78,14 @@ def clickData(cf, ticker, price, granularity, count, from_, to, smooth,
                  "dailyAlignment": dailyalignment,
                  "alignmentTimezone": alignmenttimezone,
                  "weeklyAlignment": weeklyalignment}
+
     if from_ is None:
         del arguments["from"]
         del arguments["to"]
         del arguments["includeFirst"]
     else:
         del arguments["count"]
+
     r = oanda.Instrument(click.format_filename(cf))
     data = r.candles(ticker, arguments)
     click.echo(data.json())
