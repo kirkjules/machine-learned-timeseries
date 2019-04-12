@@ -10,6 +10,7 @@ api = {editable = true,path = "."}
 requests = "*"
 click = "*"
 setuptools = "*"
+pandas = "*"
 
 [requires]
 python_version = "3.7"
