@@ -1,23 +1,9 @@
-# import configparser
+import logging
 from . import Api
 import requests
 import pandas as pd
-import logging
 
 log = logging.getLogger(__name__)
-
-
-"""
-class Api:
-
-    def __init__(self, configFile):
-
-        config = configparser.ConfigParser()
-        with open(configFile, 'r') as f:
-            config.read_file(f)
-        self.sections = config.sections()
-        self.key = config["api-fxpractice.oanda.com"]["authtoken"]
-"""
 
 
 class Instrument(Api):
