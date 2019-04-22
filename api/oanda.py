@@ -1,6 +1,7 @@
 import logging
 from . import Api
 import requests
+import exceptions
 import pandas as pd
 
 log = logging.getLogger(__name__)
@@ -9,7 +10,7 @@ log = logging.getLogger(__name__)
 class Instrument(Api):
 
     def candles(self, instrument, queryParameters, outType=None,
-                outDir=None):
+                outFile=None):
         """Request query parameters are: price, granularity, count,
         from, to, smooth, includeFirst, dailyAlignment, alignmentTimezone,
         weeklyAlignment.
@@ -25,6 +26,11 @@ class Instrument(Api):
         r = requests.get(url.format(instrument),
                          headers=self.headers,
                          params=queryParameters)
+        
+        try:
+            r.status_code == 200
+        except excpetions.Oanda as e:
+            raise(e)
 
         if outType is None:
             return r
@@ -49,7 +55,7 @@ class Instrument(Api):
                 return df
 
             elif outType == "csv":
-                return df.to_csv(outDir)
+                return df.to_csv(outFile)
 
         else:
             print("Error")
