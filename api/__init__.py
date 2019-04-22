@@ -7,7 +7,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 class Api:
 
-    def __init__(self, configFile, live=False):
+    def __init__(self, configFile, live):
 
         config = configparser.ConfigParser()
         with open(configFile, 'r') as f:

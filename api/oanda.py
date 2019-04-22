@@ -1,70 +1,58 @@
 import logging
 from . import Api
 import requests
-import exceptions
 import pandas as pd
 
 log = logging.getLogger(__name__)
 
 
-class Instrument(Api):
+class Candles(Api):
 
-    def candles(self, instrument, queryParameters, outType=None,
-                outFile=None):
+    def __init__(self, configFile, instrument, queryParameters, live):
         """Request query parameters are: price, granularity, count,
         from, to, smooth, includeFirst, dailyAlignment, alignmentTimezone,
         weeklyAlignment.
         Refer to http://developer.oanda.com/rest-live-v20/instrument-ep/
         for parameter descriptions.
-
-        Optional arguments outType and outDir can be specified if the return
-        should not be a request object.
         """
+        super().__init__(configFile, live)
+        self.instrument = instrument
+        self.queryParameters = queryParameters
+        self.url = self.base + "instruments/{0}/candles?".format(
+            self.instrument)
+        self.r = requests.get(self.url,
+                              headers=self.headers,
+                              params=self.queryParameters)
 
-        url = self.base + "instruments/{0}/candles?"
-
-        r = requests.get(url.format(instrument),
-                         headers=self.headers,
-                         params=queryParameters)
-        
         try:
-            r.status_code == 200
-        except excpetions.Oanda as e:
-            raise(e)
+            self.r.status_code == 200
+        except Api.exceptions.Oanda as e:
+            log.debug(e)
 
-        if outType is None:
-            return r
+    def json(self):
+        return self.r.json()
 
-        elif outType == "json":
-            return r.json()
+    def df(self, outFile=None):
 
-        elif outType == "pandas" or outType == "csv":
+        dic = {}
 
-            dic = {}
+        cols = {"o": "open", "h": "high", "l": "low", "c": "close"}
 
-            cols = {"o": "open", "h": "high", "l": "low", "c": "close"}
+        for i in range(len(r.json()["candles"])):
+            dic[r.json()["candles"][i]["time"]] = r.json()["candles"][i]["mid"]
 
-            for i in range(len(r.json()["candles"])):
-                dic[r.json()["candles"][i]["time"]] =\
-                        r.json()["candles"][i]["mid"]
+        data = pd.DataFrame.from_dict(dic, orient="index").rename(columns=cols)
 
-            df = pd.DataFrame.from_dict(dic,
-                                        orient="index").rename(columns=cols)
-
-            if outType == "pandas":
-                return df
-
-            elif outType == "csv":
-                return df.to_csv(outFile)
-
+        if outFile is None:
+            return data
         else:
-            print("Error")
+            return data.to_csv(outFile)
 
 
 if __name__ == "__main__":
 
     ticker = "EUR_USD"
     arguments = {"count": "6", "price": "M", "granularity": "S5"}
-    r = Instrument("api/config.ini", live=False)
-    data = r.candles(ticker, arguments)
+    r = Candles("api/config.ini", ticker, arguments, live=False)
+    data = r.json()
     print(data.json())

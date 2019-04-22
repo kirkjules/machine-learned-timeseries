@@ -4,11 +4,6 @@ from api import oanda
 
 @click.command()
 @click.argument("cf", type=click.Path(exists=True))
-@click.argument("live",
-                default=False,
-                type=click.BOOL,
-                help="Select which Oanda enviroment to action commands in,\
-                i.e. Live or Practice.")
 @click.argument("ticker", type=click.STRING)
 @click.option("--price",
               default="M",
@@ -69,9 +64,14 @@ from api import oanda
               Candlesticks with daily alignment will be aligned to the\
               dailyAlignment hour within the alignmentTimezone. Note that\
               the returned times will still be represented in UTC.")
-def clickData(cf, live, ticker, price, granularity, count, from_, to, smooth,
+@click.option("--live",
+              default=False,
+              type=click.BOOL,
+              help="Select which Oanda enviroment to action commands in,\
+              i.e. Live or Practice.")
+def clickData(cf, ticker, price, granularity, count, from_, to, smooth,
               includefirst, dailyalignment, weeklyalignment,
-              alignmenttimezone):
+              alignmenttimezone, live):
 
     arguments = {"price": price,
                  "granularity": granularity,
@@ -91,6 +91,5 @@ def clickData(cf, live, ticker, price, granularity, count, from_, to, smooth,
     else:
         del arguments["count"]
 
-    r = oanda.Instrument(click.format_filename(cf), live)
-    data = r.candles(ticker, arguments)
-    click.echo(data.json())
+    r = oanda.Candles(click.format_filename(cf), ticker, arguments, live)
+    click.echo(r.json())
