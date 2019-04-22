@@ -20,13 +20,10 @@ class Instrument(Api):
         should not be a request object.
         """
 
-        headers = {"Content-Type": "application/json",
-                   "Authorization": "Bearer {0}".format(self.key)}
-
-        url = "https://api-fxpractice.oanda.com/v3/instruments/{0}/candles?"
+        url = self.base + "instruments/{0}/candles?"
 
         r = requests.get(url.format(instrument),
-                         headers=headers,
+                         headers=self.headers,
                          params=queryParameters)
 
         if outType is None:
@@ -62,6 +59,6 @@ if __name__ == "__main__":
 
     ticker = "EUR_USD"
     arguments = {"count": "6", "price": "M", "granularity": "S5"}
-    r = Instrument("api/config.ini")
+    r = Instrument("api/config.ini", live=False)
     data = r.candles(ticker, arguments)
     print(data.json())
