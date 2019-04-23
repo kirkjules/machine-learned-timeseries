@@ -26,25 +26,31 @@ class TestCandles(unittest.TestCase):
         """
         Test Oanda error message logging.
         """
-
-        ticker = "EUR_USD"
-        arguments = {"count": "6", "price": "M", "granularity": "S5"}
         cf = "config.ini"
-        live = True
+        arguments = {"count": "6", "price": "M", "granularity": "S5"}
+        errors = {400: {"ticker": "XYZ_ABC",
+                        "arguments": arguments,
+                        "live": False},
+                  401: {"ticker": "EUR_USD",
+                        "arguments": arguments,
+                        "live": True}}
 
-        data = oanda.Candles(cf, ticker, arguments, live)
-        self.assertEqual(data.r.status_code, 400)
+        for i in errors.keys():
+            with self.subTest(i=i):
+                data = oanda.Candles(cf,
+                                     errors[i]["ticker"],
+                                     errors[i]["arguments"],
+                                     errors[i]["live"])
+                self.assertEqual(data.r.status_code, i)
 
     def test_out(self):
         """
         Test the function output defined by outFile argument.
         """
-
         cf = "config.ini"
-        live = False
-
         ticker = "EUR_USD"
         arguments = {"count": "6", "price": "M", "granularity": "S5"}
+        live = False
 
         r = oanda.Candles(cf, ticker, arguments, live)
 
