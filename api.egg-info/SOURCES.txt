@@ -1,6 +1,7 @@
 README.md
 setup.py
 api/__init__.py
+api/exceptions.py
 api/oanda.py
 api.egg-info/PKG-INFO
 api.egg-info/SOURCES.txt

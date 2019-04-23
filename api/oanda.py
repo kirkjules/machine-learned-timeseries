@@ -1,7 +1,7 @@
 import logging
-from . import Api
 import requests
 import pandas as pd
+from . import Api, exceptions
 
 log = logging.getLogger(__name__)
 
@@ -24,10 +24,8 @@ class Candles(Api):
                               headers=self.headers,
                               params=self.queryParameters)
 
-        try:
-            self.r.status_code == 200
-        except Api.exceptions.Oanda as e:
-            log.debug(e)
+        if self.r.status_code != 200:
+            log.info(str(exceptions.Oanda(obj=self.r)))
 
     def json(self):
         return self.r.json()
@@ -38,8 +36,9 @@ class Candles(Api):
 
         cols = {"o": "open", "h": "high", "l": "low", "c": "close"}
 
-        for i in range(len(r.json()["candles"])):
-            dic[r.json()["candles"][i]["time"]] = r.json()["candles"][i]["mid"]
+        for i in range(len(self.r.json()["candles"])):
+            dic[self.r.json()["candles"][i]["time"]] =\
+                    self.r.json()["candles"][i]["mid"]
 
         data = pd.DataFrame.from_dict(dic, orient="index").rename(columns=cols)
 
