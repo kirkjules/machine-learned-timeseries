@@ -23,6 +23,7 @@ class Candles(Api):
         self.r = requests.get(self.url,
                               headers=self.headers,
                               params=self.queryParameters)
+        self.status = self.r.status_code
 
         if self.r.status_code != 200:
             log.info(str(exceptions.Oanda(obj=self.r)))
