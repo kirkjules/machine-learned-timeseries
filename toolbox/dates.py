@@ -1,7 +1,7 @@
 import pytz
-import time
 import logging
 from datetime import datetime
+from dateutil.tz import tzlocal
 
 log = logging.getLogger(__name__)
 
@@ -29,40 +29,47 @@ Note: any actions logged will be in UTC time. If the user needs a timestamp\
 
 class Conversion():
 
-    def __init__(self, date, local=True, timezone=None):
+    def __init__(self, date, local_tz=None, conv_tz=None):
         """
         To convert any local time to UTC and back.
         :date, provided in string format %Y-%m-%d %H:%M:%S.
         :local, flag if system timezone should be used for UTC conversion.
         :timezone, target timezone to convert date to.
         """
+        try:
+            obj = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+        except ValueError as e:
+            raise(e)
+
         self.date = date
 
-        if local is True:
-            local_tz = time.strftime("%z", time.localtime())  # e.g. +0700
-        else:
-            local_tz = "+0000"
+        if local_tz is None:  # Infer timezone from system
+            tz = tzlocal()
 
-        # Create a local timezone aware datetime object
-        try:
-            self.local = datetime.strptime(date + local_tz,
-                                           "%Y-%m-%d %H:%M:%S%z")
-        except ValueError as e:
-            self.local = None
-            self.utc = None
+        elif local_tz in pytz.common_timezones:  # Set timezone as stated
+            tz = pytz.timezone(local_tz)
+
+        else:  # Set timezone as utc as final backup
+            tz = pytz.utc
+
+        # Create a timezone aware datetime object
+        self.date_tz = datetime.strftime(obj.replace(tzinfo=tz),
+                                         "%Y-%m-%d %H:%M:%S%z")
+
+        # Convert to UTC datetime
+        utc = pytz.UTC
+        self.date_utc = self.date_tz.astimezone(utc)
+
+        # Functionality to convert to any chosen timezone
+        if conv_tz is None:
             self.convert = None
-            log.exception(e)
-        else:
-            # Convert to UTC datetime
-            utc = pytz.UTC
-            self.utc = self.local.astimezone(utc)
 
-            # Functionality to convert to any chosen timezone
-            if timezone is not None:
-                tz = pytz.timezone(timezone)
-                self.convert = self.utc.astimezone(tz)
-            else:
-                self.convert = self.local
+        elif local_tz in pytz.common_timezones:  # Set timezone as stated
+            tz = pytz.timezone(conv_tz)
+            self.convert = self.date_utc.astimezone(tz)
+
+        else:
+            self.convert = None
 
         # datetime.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime())
         # '2019-04-24T13:18:16+0700'

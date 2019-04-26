@@ -27,3 +27,7 @@ class TestConversion(unittest.TestCase):
                                      timestamps[i] + local_tz)
                 else:
                     self.assertEqual(t.local, None)
+
+
+if __name__ == "__main__":
+    unittest.main()
