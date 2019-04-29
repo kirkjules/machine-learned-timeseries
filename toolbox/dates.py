@@ -1,6 +1,6 @@
 import pytz
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.tz import tzlocal
 
 log = logging.getLogger(__name__)
@@ -53,34 +53,107 @@ class Conversion():
             tz = pytz.utc
 
         # Create a timezone aware datetime object
-        self.date_tz = datetime.strftime(obj.replace(tzinfo=tz),
+        self.tz_date = datetime.strftime(obj.replace(tzinfo=tz),
                                          "%Y-%m-%d %H:%M:%S%z")
 
         # Convert to UTC datetime
         utc = pytz.UTC
-        self.date_utc = self.date_tz.astimezone(utc)
+        self.utc_date = self.tz_date.astimezone(utc)
 
         # Functionality to convert to any chosen timezone
         if conv_tz is None:
-            self.convert = None
+            self.conv_date = conv_tz
 
-        elif local_tz in pytz.common_timezones:  # Set timezone as stated
-            tz = pytz.timezone(conv_tz)
-            self.convert = self.date_utc.astimezone(tz)
+        elif conv_tz in pytz.common_timezones:  # Set timezone as stated
+            self.conv_date = self.utc_date.astimezone(pytz.timezone(conv_tz))
 
         else:
-            self.convert = None
+            self.conv_date = None
 
         # datetime.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime())
         # '2019-04-24T13:18:16+0700'
 
 
 class Select():
+    """
+    Generates datetime variable sets from predefined business logic.
+    """
 
-    def __init__(self, from_, to):
+    def __init__(self, from_=None, to=None, local_tz=None):
         """
-        To record, convert and store date/time variables.
+        Initialise datestring arguments into UTC time.
+
+        If no arguments are provided all methods will use datetime.now().
+
+        All times are converted to UTC time.
         """
-        self.from_ = from_
-        self.to = to
-        self.utc_from = []
+        if from_ is not None:
+            self.from_date = Conversion(from_, local_tz=local_tz).utc_date
+
+        if to is not None:
+            self.to_date = Conversion(to, local_tz=local_tz).utc_date
+        else:
+            self.to_date = Conversion(datetime.now()).utc_date
+
+    def by_generic(self, date, _type="start"):
+
+        if _type == "start":
+            fac = 0
+        elif _type == "end":
+            fac = 1
+
+        if date.isoweekday() == (5 + fac):  # Friday or Saturday
+            dt = date + (timedelta(days=2))
+        elif date.isoweekday() == (6 + fac):  # Saturday or Sunday
+            dt = date + (timedelta(days=1))
+        else:
+            dt = date
+
+        return dt
+
+    def by_calendar_year(self, granularity="D", years=1):
+        dY = 0
+        while dY in list(range(years)):
+            start = self.by_generic(datetime(self.to_date.year - dY, 1, 1),
+                                    _type="start")
+            utc_start = Conversion(start.replace(hours=17),
+                                   local_tz="America/New_York").utc_date
+            if dY == 0:
+                end = self.to_date
+            else:
+                end = self.by_generic(datetime(self.to_date.year - dY, 12, 31),
+                                      _type="end")
+                utc_end = Conversion(end.replace(hours=16),
+                                     local_tz="America/New_York").utc_date
+            yield(utc_start, utc_end, dY)
+            dY += 1
+
+    def by_financial_year():
+        pass
+
+    def by_quarter():
+        pass
+
+    def by_month():
+        pass
+
+    def by_week():
+        pass
+
+    def by_day():
+        pass
+
+    def calendar_year_to_date():
+        pass
+
+    def financial_year_to_date():
+        pass
+
+    def quarter_to_date():
+        pass
+
+    def week_to_date():
+        pass
+
+    def day_to_time():
+        pass
