@@ -59,5 +59,23 @@ class TestConversion(unittest.TestCase):
                                  datetime.strftime(c_t, "%Y-%m-%d %H:%M:%S%z"))
 
 
+class TestSelect(unittest.TestCase):
+
+    def test_input(self):
+        """
+        Test datestring and local_tz input and conversion.
+        """
+        from_ = "2019-04-16 18:32:21"
+        local_tz = "Australia/Sydney"
+        self.assertEqual(datetime.strftime(dates.Select(from_=from_,
+                                                        local_tz=local_tz
+                                                        ).from_date,
+                                           "%Y-%m-%d %H:%M:%S%z"),
+                         "2019-04-16 08:32:21+0000")
+
+    def test_general_time(self):
+        pass
+
+
 if __name__ == "__main__":
     unittest.main()

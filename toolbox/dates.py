@@ -1,6 +1,7 @@
 import pytz
 import logging
-from datetime import datetime, timedelta
+import calendar
+from datetime import datetime
 from dateutil.tz import tzlocal
 
 log = logging.getLogger(__name__)
@@ -78,9 +79,7 @@ class Select():
     def __init__(self, from_=None, to=None, local_tz=None):
         """
         Initialise datestring arguments into UTC time.
-
         If no arguments are provided all methods will use datetime.now().
-
         All times are converted to UTC time.
         """
         if from_ is not None:
@@ -89,40 +88,64 @@ class Select():
         if to is not None:
             self.to_date = Conversion(to, local_tz=local_tz).utc_date
         else:
-            self.to_date = Conversion(datetime.now()).utc_date
+            self.to_date = Conversion(datetime.strftime(datetime.now(),
+                                                        "%Y-%m-%d %H:%M:%S"
+                                                        )).utc_date
 
-    def by_generic(self, date, _type="start"):
+    def general_time(self, date, _type="start", granularity="D"):
+        """
+        Business logic for validating an appropriate query time variable.
+        Oanda candles api will error if requesting data for an invalid
+        timestamp, i.e. outside trading hours for a given ticker.
+        Function will limit timestamp to before Friday 1700h and after
+        Saturday 1700h.
+        """
+        granulatiry_rules = {"D": {"start": {"hours": 17, "minutes": 0},
+                                   "end": {"hours": 17, "minutes": 0}},
+                             "H4": {"start": {"hours": 17, "minutes": 0},
+                                    "end": {"hours": 13, "minutes": 0}},
+                             "H1": {"start": {"hours": 17, "minutes": 0},
+                                    "end": {"hours": 16, "minutes": 0}},
+                             "M15": {"start": {"hours": 17, "minutes": 0},
+                                     "end": {"hours": 16, "minutes": 45}}}
 
         if _type == "start":
-            fac = 0
-            coef = 1
+            n = [5, 6]
         elif _type == "end":
-            fac = 1
-            coef = -0.5
+            n = [5, 6, 7]
 
-        if date.isoweekday() == (5 + fac):  # Friday or Saturday
-            dt = date + (timedelta(days=2 * coef))
-        elif date.isoweekday() == (6 + fac):  # Saturday or Sunday
-            dt = date + (timedelta(days=1 / coef))
-        else:
-            dt = date
+        dt_s = []
+        for dt in calendar.Calendar().itermonthdates(date.year, date.month):
+            if dt.year != date.year:
+                pass
+            elif dt.isoweekday() in n:
+                pass
+            else:
+                dt_s.append(dt)
 
+        if _type == "start":
+            dt = dt_s[0]
+        elif _type == "end":
+            dt = dt_s[-1]
+
+        dt = dt.replace(hours=granulatiry_rules[granularity][_type]["hours"],
+                        minutes=granulatiry_rules[granularity][_type]
+                        ["minutes"])
         return dt
 
     def by_calendar_year(self, granularity="D", years=1):
         dY = 0
         while dY in list(range(years)):
-            start = self.by_generic(datetime(self.to_date.year - dY, 1, 1),
-                                    _type="start")
-            utc_start = Conversion(start.replace(hours=17),
-                                   local_tz="America/New_York").utc_date
+            start = self.general_time(datetime(self.to_date.year - dY, 1, 1),
+                                      _type="start", granularity=granularity)
+            utc_start = Conversion(start, local_tz="America/New_York").utc_date
             if dY == 0:
                 utc_end = self.to_date
             else:
-                end = self.by_generic(datetime(self.to_date.year - dY, 12, 31),
-                                      _type="end")
-                utc_end = Conversion(end.replace(hours=16),
-                                     local_tz="America/New_York").utc_date
+                end = self.general_time(datetime(self.to_date.year - dY,
+                                                 12, 31),
+                                        _type="end", granularity=granularity)
+                utc_end = Conversion(end, local_tz="America/New_York").utc_date
             yield(utc_start, utc_end, dY)
             dY += 1
 
