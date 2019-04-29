@@ -45,28 +45,24 @@ class Conversion():
 
         if local_tz is None:  # Infer timezone from system
             tz = tzlocal()
-
         elif local_tz in pytz.common_timezones:  # Set timezone as stated
             tz = pytz.timezone(local_tz)
-
         else:  # Set timezone as utc as final backup
             tz = pytz.utc
 
         # Create a timezone aware datetime object
-        self.tz_date = datetime.strftime(obj.replace(tzinfo=tz),
-                                         "%Y-%m-%d %H:%M:%S%z")
+        if local_tz is None:
+            self.tz_date = obj.replace(tzinfo=tzlocal())
+        else:
+            self.tz_date = tz.localize(obj)
 
         # Convert to UTC datetime
         utc = pytz.UTC
         self.utc_date = self.tz_date.astimezone(utc)
 
         # Functionality to convert to any chosen timezone
-        if conv_tz is None:
-            self.conv_date = conv_tz
-
-        elif conv_tz in pytz.common_timezones:  # Set timezone as stated
+        if conv_tz in pytz.common_timezones:  # Set timezone as stated
             self.conv_date = self.utc_date.astimezone(pytz.timezone(conv_tz))
-
         else:
             self.conv_date = None
 
@@ -99,13 +95,15 @@ class Select():
 
         if _type == "start":
             fac = 0
+            coef = 1
         elif _type == "end":
             fac = 1
+            coef = -0.5
 
         if date.isoweekday() == (5 + fac):  # Friday or Saturday
-            dt = date + (timedelta(days=2))
+            dt = date + (timedelta(days=2 * coef))
         elif date.isoweekday() == (6 + fac):  # Saturday or Sunday
-            dt = date + (timedelta(days=1))
+            dt = date + (timedelta(days=1 / coef))
         else:
             dt = date
 

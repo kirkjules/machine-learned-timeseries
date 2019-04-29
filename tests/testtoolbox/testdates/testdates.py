@@ -1,7 +1,8 @@
 import logging
 import unittest
 import time
-from datetime import datetime
+import pytz
+from datetime import datetime, timedelta
 from toolbox import dates
 
 logging.basicConfig(level=logging.INFO)
@@ -20,13 +21,42 @@ class TestConversion(unittest.TestCase):
 
         for i in range(len(timestamps)):
             with self.subTest(exp=timestamps[i]):
-                t = dates.Conversion(timestamps[i])
                 if i == 0:
-                    self.assertEqual(datetime.strftime(t.local,
+                    t = dates.Conversion(timestamps[i])
+                    self.assertEqual(datetime.strftime(t.tz_date,
                                                        "%Y-%m-%d %H:%M:%S%z"),
                                      timestamps[i] + local_tz)
                 else:
-                    self.assertEqual(t.local, None)
+                    with self.assertRaises(ValueError):
+                        dates.Conversion(timestamps[i])
+
+    def test_local_tz(self):
+        """
+        Test valid local tz input and resulting datetime awareness.
+        """
+        tz = {"America/New_York": "-0400", "Asia/Tokyo": "+0900",
+              "Europe/Paris": "+0200", "XYZ/ABC": "+0000", None: "+0700"}
+        for i in tz.keys():
+            with self.subTest(exp=i):
+                t = dates.Conversion("2014-04-13 16:04:32", local_tz=i)
+                # print(t.tz_date, i)
+                self.assertEqual(datetime.strftime(t.tz_date, "%z"), tz[i])
+
+    def test_utc_date(self):
+        """
+        Test UTC conversion of localised datetime objects.
+        """
+        tz = {"America/New_York": "-4", "Asia/Tokyo": "+9",
+              "Europe/Paris": "+2", "XYZ/ABC": "+0", None: "+7"}
+        for i in tz.keys():
+            with self.subTest(exp=i):
+                t = dates.Conversion("2014-04-13 16:04:32", local_tz=i)
+                # print(t.tz_date, i)
+                c_t = (t.tz_date.replace(tzinfo=pytz.utc)
+                       + timedelta(hours=int(tz[i]) * -1))
+                self.assertEqual(datetime.strftime(t.utc_date,
+                                                   "%Y-%m-%d %H:%M:%S%z"),
+                                 datetime.strftime(c_t, "%Y-%m-%d %H:%M:%S%z"))
 
 
 if __name__ == "__main__":
