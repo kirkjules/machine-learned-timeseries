@@ -119,7 +119,7 @@ class Select():
             utc_start = Conversion(start.replace(hours=17),
                                    local_tz="America/New_York").utc_date
             if dY == 0:
-                end = self.to_date
+                utc_end = self.to_date
             else:
                 end = self.by_generic(datetime(self.to_date.year - dY, 12, 31),
                                       _type="end")
