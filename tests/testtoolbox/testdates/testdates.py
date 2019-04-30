@@ -82,7 +82,25 @@ class TestSelect(unittest.TestCase):
                                                  select=-1,
                                                  hour=17,
                                                  year_by_day=True),
-                         datetime(2018, 12, 30, 17))
+                         "2018-12-30 17:00:00")
+
+    def test_by_calendar_year(self):
+        """
+        Test by_calendar_year for n years.
+        """
+        ts = []
+        for i in dates.Select().by_calendar_year(from_hour=17,
+                                                 from_minute=0,
+                                                 to_hour=16,
+                                                 to_minute=45,
+                                                 years=2,
+                                                 year_by_day=False):
+            ts.append(i)
+        for i in ts:
+            start = datetime.strftime(i[0], "%Y-%m-%d %H:%M:%S%z")
+            end = datetime.strftime(i[1], "%Y-%m-%d %H:%M:%S%z")
+            print(start, end)
+        self.assertEqual(len(ts), 2)
 
 
 if __name__ == "__main__":

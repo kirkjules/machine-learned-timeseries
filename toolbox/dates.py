@@ -118,11 +118,12 @@ class Select():
 
         dt = dt_s[select]
         dt = datetime(dt.year, dt.month, dt.day, hour, minute)
-        return dt
+        return datetime.strftime(dt, "%Y-%m-%d %H:%M:%S")
 
-    def by_calendar_year(self, years=1, hour=17, minute=0, year_by_day=True):
+    def by_calendar_year(self, years=1, from_hour=17, from_minute=0,
+                         to_hour=17, to_minute=0, year_by_day=True):
         """
-        Generator to query y number of years where the current year is 0. The
+        Generator to query y number of years where the current year is 1. The
         function wraps the more general time_val function which validates
         appropriate start and end timestamp values for a calendar year time
         range. Returned value is a tuple of start and end datetime objects in
@@ -134,14 +135,14 @@ class Select():
         dY = 0
         while dY in list(range(years)):
             start = self.time_val(datetime(self.to_date.year - dY, 1, 1),
-                                  hour=hour, minute=minute,
+                                  hour=from_hour, minute=from_minute,
                                   year_by_day=year_by_day)
             utc_start = Conversion(start, local_tz="America/New_York").utc_date
             if dY == 0:
                 utc_end = self.to_date
             else:
                 end = self.time_val(datetime(self.to_date.year - dY, 12, 31),
-                                    select=-1, hour=hour, minute=minute,
+                                    select=-1, hour=to_hour, minute=to_minute,
                                     year_by_day=year_by_day)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
             yield(utc_start, utc_end, dY)
