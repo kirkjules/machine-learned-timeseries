@@ -81,7 +81,7 @@ class TestSelect(unittest.TestCase):
         self.assertEqual(dates.Select().time_val(date=date,
                                                  select=-1,
                                                  hour=17,
-                                                 by_year=True),
+                                                 year_by_day=True),
                          datetime(2018, 12, 30, 17))
 
 

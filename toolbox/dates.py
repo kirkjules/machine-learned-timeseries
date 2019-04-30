@@ -33,9 +33,9 @@ class Conversion():
     def __init__(self, date, local_tz=None, conv_tz=None):
         """
         To convert any local time to UTC and back.
-        :date, provided in string format %Y-%m-%d %H:%M:%S.
-        :local, flag if system timezone should be used for UTC conversion.
-        :timezone, target timezone to convert date to.
+        :param date: provided in string format %Y-%m-%d %H:%M:%S.
+        :param local_tz: timzone to localise given datetime with.
+        :param conv_tz: target timezone to convert datetime to.
         """
         try:
             obj = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
@@ -93,11 +93,17 @@ class Select():
                                                         )).utc_date
 
     def time_val(self, date, no_days=[5, 6], select=0, hour=0, minute=0,
-                 by_year=False):
+                 year_by_day=False):
         """
         Business logic for validating an appropriate query time variable.
         Oanda candles api will error if requesting data for an invalid
-        timestamp, i.e. outside trading hours for a given ticker.
+        timestamp, i.e. outside trading hours for a given ticker. Note, hour
+        and minute params are relevant to the intended granularity.
+        :param hour: 0 to 23 int value to precise the timestamp hour value.
+        :param minute: 0 to 59 int value to precise the timestamp minute value.
+        :param year_by_day: boolean preventing dt value returning Dec 31, 1700h
+        New York local time, for daily candle query. Note, granularities less
+        than daily can still be queried on Dec 31, e.g M15 -> Dec 31, 16:45:00.
         """
         dt_s = []
         for dt in calendar.Calendar().itermonthdates(date.year, date.month):
@@ -105,7 +111,7 @@ class Select():
                 pass
             elif dt.isoweekday() in no_days:
                 pass
-            elif by_year is True and dt.day == 31:
+            elif year_by_day is True and dt.day == 31:
                 pass
             else:
                 dt_s.append(dt)
@@ -114,20 +120,29 @@ class Select():
         dt = datetime(dt.year, dt.month, dt.day, hour, minute)
         return dt
 
-    def by_calendar_year(self, granularity="D", years=1):
+    def by_calendar_year(self, years=1, hour=17, minute=0, year_by_day=True):
+        """
+        Generator to query y number of years where the current year is 0. The
+        function wraps the more general time_val function which validates
+        appropriate start and end timestamp values for a calendar year time
+        range. Returned value is a tuple of start and end datetime objects in
+        UTC time converted from "America/New_York" local time defined by
+        time_val dates and hour and minute arguments. Inputs are treated as
+        New York time since this is where the exchange is located and therefore
+        the most appropriate place to define business logic around.
+        """
         dY = 0
         while dY in list(range(years)):
             start = self.time_val(datetime(self.to_date.year - dY, 1, 1),
-                                  hour=17,
-                                  by_year=True)
+                                  hour=hour, minute=minute,
+                                  year_by_day=year_by_day)
             utc_start = Conversion(start, local_tz="America/New_York").utc_date
             if dY == 0:
                 utc_end = self.to_date
             else:
                 end = self.time_val(datetime(self.to_date.year - dY, 12, 31),
-                                    select=-1,
-                                    hour=17,
-                                    by_year=True)
+                                    select=-1, hour=hour, minute=minute,
+                                    year_by_day=year_by_day)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
             yield(utc_start, utc_end, dY)
             dY += 1
