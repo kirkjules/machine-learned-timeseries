@@ -92,59 +92,42 @@ class Select():
                                                         "%Y-%m-%d %H:%M:%S"
                                                         )).utc_date
 
-    def general_time(self, date, _type="start", granularity="D"):
+    def time_val(self, date, no_days=[5, 6], select=0, hour=0, minute=0,
+                 by_year=False):
         """
         Business logic for validating an appropriate query time variable.
         Oanda candles api will error if requesting data for an invalid
         timestamp, i.e. outside trading hours for a given ticker.
-        Function will limit timestamp to before Friday 1700h and after
-        Saturday 1700h.
         """
-        granulatiry_rules = {"D": {"start": {"hours": 17, "minutes": 0},
-                                   "end": {"hours": 17, "minutes": 0}},
-                             "H4": {"start": {"hours": 17, "minutes": 0},
-                                    "end": {"hours": 13, "minutes": 0}},
-                             "H1": {"start": {"hours": 17, "minutes": 0},
-                                    "end": {"hours": 16, "minutes": 0}},
-                             "M15": {"start": {"hours": 17, "minutes": 0},
-                                     "end": {"hours": 16, "minutes": 45}}}
-
-        if _type == "start":
-            n = [5, 6]
-        elif _type == "end":
-            n = [5, 6, 7]
-
         dt_s = []
         for dt in calendar.Calendar().itermonthdates(date.year, date.month):
-            if dt.year != date.year:
+            if dt.month != date.month:
                 pass
-            elif dt.isoweekday() in n:
+            elif dt.isoweekday() in no_days:
+                pass
+            elif by_year is True and dt.day == 31:
                 pass
             else:
                 dt_s.append(dt)
 
-        if _type == "start":
-            dt = dt_s[0]
-        elif _type == "end":
-            dt = dt_s[-1]
-
-        dt = dt.replace(hours=granulatiry_rules[granularity][_type]["hours"],
-                        minutes=granulatiry_rules[granularity][_type]
-                        ["minutes"])
+        dt = dt_s[select]
+        dt = datetime(dt.year, dt.month, dt.day, hour, minute)
         return dt
 
     def by_calendar_year(self, granularity="D", years=1):
         dY = 0
         while dY in list(range(years)):
-            start = self.general_time(datetime(self.to_date.year - dY, 1, 1),
-                                      _type="start", granularity=granularity)
+            start = self.time_val(datetime(self.to_date.year - dY, 1, 1),
+                                  hour=17,
+                                  by_year=True)
             utc_start = Conversion(start, local_tz="America/New_York").utc_date
             if dY == 0:
                 utc_end = self.to_date
             else:
-                end = self.general_time(datetime(self.to_date.year - dY,
-                                                 12, 31),
-                                        _type="end", granularity=granularity)
+                end = self.time_val(datetime(self.to_date.year - dY, 12, 31),
+                                    select=-1,
+                                    hour=17,
+                                    by_year=True)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
             yield(utc_start, utc_end, dY)
             dY += 1

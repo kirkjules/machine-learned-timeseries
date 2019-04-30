@@ -73,8 +73,16 @@ class TestSelect(unittest.TestCase):
                                            "%Y-%m-%d %H:%M:%S%z"),
                          "2019-04-16 08:32:21+0000")
 
-    def test_general_time(self):
-        pass
+    def test_time_val(self):
+        """
+        Test time_val for function integrity.
+        """
+        date = datetime(2018, 12, 31)
+        self.assertEqual(dates.Select().time_val(date=date,
+                                                 select=-1,
+                                                 hour=17,
+                                                 by_year=True),
+                         datetime(2018, 12, 30, 17))
 
 
 if __name__ == "__main__":
