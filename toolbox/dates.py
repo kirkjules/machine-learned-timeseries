@@ -92,7 +92,7 @@ class Select():
                                                         "%Y-%m-%d %H:%M:%S"
                                                         )).utc_date
 
-    def time_val(self, date, no_days=[5, 6], select=0, hour=0, minute=0,
+    def time_val(self, date, no_days=[], select=0, hour=0, minute=0,
                  year_by_day=False):
         """
         Business logic for validating an appropriate query time variable.
@@ -120,8 +120,8 @@ class Select():
         dt = datetime(dt.year, dt.month, dt.day, hour, minute)
         return datetime.strftime(dt, "%Y-%m-%d %H:%M:%S")
 
-    def by_calendar_year(self, years=1, from_hour=17, from_minute=0,
-                         to_hour=17, to_minute=0, year_by_day=True):
+    def by_calendar_year(self, no_days=[], from_hour=17, from_minute=0,
+                         to_hour=17, to_minute=0, year_by_day=True, years=1):
         """
         Generator to query y number of years where the current year is 1. The
         function wraps the more general time_val function which validates
@@ -136,20 +136,55 @@ class Select():
         while dY in list(range(years)):
             start = self.time_val(datetime(self.to_date.year - dY, 1, 1),
                                   hour=from_hour, minute=from_minute,
-                                  year_by_day=year_by_day)
+                                  year_by_day=year_by_day, no_days=no_days)
             utc_start = Conversion(start, local_tz="America/New_York").utc_date
             if dY == 0:
                 utc_end = self.to_date
             else:
                 end = self.time_val(datetime(self.to_date.year - dY, 12, 31),
                                     select=-1, hour=to_hour, minute=to_minute,
-                                    year_by_day=year_by_day)
+                                    year_by_day=year_by_day, no_days=no_days)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
             yield(utc_start, utc_end, dY)
             dY += 1
 
-    def by_financial_year():
-        pass
+    def by_financial_year(self, no_days=[], from_hour=17, from_minute=0,
+                          to_hour=17, to_minute=0, year_by_day=False, years=1):
+
+        # Record system datetime string.
+        now = datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
+        # Localise now to system timezone and convert to UTC.
+        now_utc = Conversion(now).utc_date
+        # Set end-of-financial year datetime for COB June 30th.
+        limit = datetime.strftime(datetime(now_utc.year, 6, 30, 17),
+                                  "%Y-%m-%d %H:%M:%S")
+        # Localise limit to New York time and convert to UTC.
+        limit_utc = Conversion(limit, local_tz="America/New_York").utc_date
+
+        if now_utc < limit_utc:
+            s = 1
+            dY = 1
+            years = years + 1
+        else:
+            s = 0
+            dY = 0
+            years = years
+
+        while dY in list(range(years)):
+            start = self.time_val(datetime(self.to_date.year - dY, 7, 1),
+                                  hour=from_hour, minute=from_minute,
+                                  year_by_day=year_by_day, no_days=no_days)
+            utc_start = Conversion(start, local_tz="America/New_York").utc_date
+            if dY == s:
+                utc_end = self.to_date
+            else:
+                end = self.time_val(datetime(self.to_date.year - dY + 1, 6,
+                                             30),
+                                    select=-1, hour=to_hour, minute=to_minute,
+                                    year_by_day=year_by_day, no_days=no_days)
+                utc_end = Conversion(end, local_tz="America/New_York").utc_date
+            yield(utc_start, utc_end, dY)
+            dY += 1
 
     def by_quarter():
         pass
