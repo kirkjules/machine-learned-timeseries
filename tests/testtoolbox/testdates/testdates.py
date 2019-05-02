@@ -94,7 +94,7 @@ class TestSelect(unittest.TestCase):
                                                  from_minute=0,
                                                  to_hour=16,
                                                  to_minute=45,
-                                                 years=2,
+                                                 period=2,
                                                  year_by_day=False,
                                                  no_days=[6]):
             ts.append(i)
@@ -104,24 +104,43 @@ class TestSelect(unittest.TestCase):
         #   print(start, end)
         self.assertEqual(len(ts), 2)
 
-    def test_by_financial_year(self):
+    def test_by_financial_year_limits(self):
         """
-        Test by_financial_year for n years.
+        Test by_financial_year for n years limit evaluation.
         """
         ts = []
         for i in dates.Select().by_financial_year(from_hour=17,
                                                   from_minute=0,
                                                   to_hour=16,
                                                   to_minute=45,
-                                                  years=3,
+                                                  period=4,
                                                   year_by_day=False,
                                                   no_days=[6]):
+            ts.append(i)
+        # for i in ts:
+        #    start = datetime.strftime(i[0], "%Y-%m-%d %H:%M:%S%z")
+        #    end = datetime.strftime(i[1], "%Y-%m-%d %H:%M:%S%z")
+        #    print(start, end)
+        self.assertEqual(len(ts), 4)
+
+    def test_by_quarter(self):
+        """
+        Test by_quarter for n periods.
+        """
+        ts = []
+        for i in dates.Select().by_quarter(from_hour=17,
+                                           from_minute=0,
+                                           to_hour=16,
+                                           to_minute=45,
+                                           period=4,
+                                           year_by_day=False,
+                                           no_days=[6]):
             ts.append(i)
         for i in ts:
             start = datetime.strftime(i[0], "%Y-%m-%d %H:%M:%S%z")
             end = datetime.strftime(i[1], "%Y-%m-%d %H:%M:%S%z")
             print(start, end)
-        self.assertEqual(len(ts), 3)
+        self.assertEqual(len(ts), 4)
 
 
 if __name__ == "__main__":
