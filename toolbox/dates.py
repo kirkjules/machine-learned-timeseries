@@ -231,8 +231,40 @@ class Select():
             yield(utc_start, utc_end)
             dP += 1
 
-    def by_month():
-        pass
+    def by_month(self, no_days=[], from_hour=17, from_minute=0,
+                 to_hour=17, to_minute=0, year_by_day=False,
+                 period=1):
+        dP = 0
+        now = self.to_date.astimezone(pytz.timezone("America/New_York"))
+        s_loc = now.month +\
+            now.day /\
+            calendar.monthrange(now.year, now.month)[1]
+        s_months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, s_loc]
+        s_months.sort()
+        ind = s_months.index(s_loc)
+        month = s_months[ind - 1]
+        s_year = now.year
+
+        while dP in list(range(period)):
+            s_ind = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].index(month)
+            s_month = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12][s_ind - dP]
+            if s_month == 12 and dP != 0:
+                s_year -= 1
+            s_date = datetime(s_year, s_month, 1)
+            start = self.time_val(s_date, hour=from_hour, minute=from_minute,
+                                  year_by_day=year_by_day, no_days=no_days)
+            utc_start = Conversion(start, local_tz="America/New_York").utc_date
+            if dP == 0:
+                utc_end = self.to_date
+            else:
+                # Base the end date off the start date.
+                e_day = calendar.monthrange(s_year, s_month)[1]
+                end = self.time_val(datetime(s_year, s_month, e_day),
+                                    select=-1, hour=to_hour, minute=to_minute,
+                                    year_by_day=year_by_day, no_days=no_days)
+                utc_end = Conversion(end, local_tz="America/New_York").utc_date
+            yield(utc_start, utc_end)
+            dP += 1
 
     def by_week():
         pass
