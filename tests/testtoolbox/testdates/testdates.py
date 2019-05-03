@@ -132,15 +132,15 @@ class TestSelect(unittest.TestCase):
                                            from_minute=0,
                                            to_hour=16,
                                            to_minute=45,
-                                           period=4,
+                                           period=20,
                                            year_by_day=False,
                                            no_days=[6]):
             ts.append(i)
-        # for i in ts:
-        #    start = datetime.strftime(i[0], "%Y-%m-%d %H:%M:%S%z")
-        #    end = datetime.strftime(i[1], "%Y-%m-%d %H:%M:%S%z")
-        #    print(start, end)
-        self.assertEqual(len(ts), 4)
+        for i in ts:
+            start = datetime.strftime(i[0], "%Y-%m-%d %H:%M:%S%z")
+            end = datetime.strftime(i[1], "%Y-%m-%d %H:%M:%S%z")
+            print(start, end)
+        self.assertEqual(len(ts), 20)
 
     def test_by_month(self):
         """
@@ -151,15 +151,15 @@ class TestSelect(unittest.TestCase):
                                          from_minute=0,
                                          to_hour=16,
                                          to_minute=45,
-                                         period=4,
+                                         period=20,
                                          year_by_day=False,
                                          no_days=[6]):
             ts.append(i)
-        for i in ts:
-            start = datetime.strftime(i[0], "%Y-%m-%d %H:%M:%S%z")
-            end = datetime.strftime(i[1], "%Y-%m-%d %H:%M:%S%z")
-            print(start, end)
-        self.assertEqual(len(ts), 4)
+        # for i in ts:
+        #    start = datetime.strftime(i[0], "%Y-%m-%d %H:%M:%S%z")
+        #    end = datetime.strftime(i[1], "%Y-%m-%d %H:%M:%S%z")
+        #    print(start, end)
+        self.assertEqual(len(ts), 20)
 
 
 if __name__ == "__main__":

@@ -190,8 +190,10 @@ class Select():
         s_loc = now.month +\
             now.day /\
             calendar.monthrange(now.year, now.month)[1]
+        months = [1, 4, 7, 10]
+        s_months = months.copy()
         # Input the locator in a list of start months for yearly quarters.
-        s_months = [1, 4, 7, 10, s_loc]
+        s_months.append(s_loc)
         # Sort the list into ascending order.
         s_months.sort()
         # Find the index of the locator in the sorted list.
@@ -205,10 +207,11 @@ class Select():
         while dP in list(range(period)):
             # Find the index of the start month in the list without the
             # locator. This is the list that will be iterated over.
-            s_ind = [1, 4, 7, 10].index(month)
+            s_ind = months.index(month)
+            months_ = months * (int(dP / 4) + 1)
             # Use the index to re-find the month, not the subtraction of dP
             # set to zero for the first iteration.
-            s_month = [1, 4, 7, 10][s_ind - dP]
+            s_month = months_[s_ind - dP]
             # Set the year to decrease with eath quarter starting in Oct.
             # Ignore for the first iteration.
             if s_month == 10 and dP != 0:
@@ -239,15 +242,18 @@ class Select():
         s_loc = now.month +\
             now.day /\
             calendar.monthrange(now.year, now.month)[1]
-        s_months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, s_loc]
+        months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        s_months = months.copy()
+        s_months.append(s_loc)
         s_months.sort()
         ind = s_months.index(s_loc)
         month = s_months[ind - 1]
         s_year = now.year
 
         while dP in list(range(period)):
-            s_ind = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].index(month)
-            s_month = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12][s_ind - dP]
+            s_ind = months.index(month)
+            months_ = months * (int(dP / 12) + 1)
+            s_month = months_[s_ind - dP]
             if s_month == 12 and dP != 0:
                 s_year -= 1
             s_date = datetime(s_year, s_month, 1)
@@ -257,7 +263,6 @@ class Select():
             if dP == 0:
                 utc_end = self.to_date
             else:
-                # Base the end date off the start date.
                 e_day = calendar.monthrange(s_year, s_month)[1]
                 end = self.time_val(datetime(s_year, s_month, e_day),
                                     select=-1, hour=to_hour, minute=to_minute,
