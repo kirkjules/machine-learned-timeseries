@@ -104,7 +104,7 @@ class TestSelect(unittest.TestCase):
         #   print(start, end)
         self.assertEqual(len(ts), 2)
 
-    def test_by_financial_year_limits(self):
+    def test_by_financial_year(self):
         """
         Test by_financial_year for n years limit evaluation.
         """
@@ -136,10 +136,10 @@ class TestSelect(unittest.TestCase):
                                            year_by_day=False,
                                            no_days=[6]):
             ts.append(i)
-        for i in ts:
-            start = datetime.strftime(i[0], "%Y-%m-%d %H:%M:%S%z")
-            end = datetime.strftime(i[1], "%Y-%m-%d %H:%M:%S%z")
-            print(start, end)
+        # for i in ts:
+        #    start = datetime.strftime(i[0], "%Y-%m-%d %H:%M:%S%z")
+        #    end = datetime.strftime(i[1], "%Y-%m-%d %H:%M:%S%z")
+        #    print(start, end)
         self.assertEqual(len(ts), 20)
 
     def test_by_month(self):
@@ -159,6 +159,25 @@ class TestSelect(unittest.TestCase):
         #    start = datetime.strftime(i[0], "%Y-%m-%d %H:%M:%S%z")
         #    end = datetime.strftime(i[1], "%Y-%m-%d %H:%M:%S%z")
         #    print(start, end)
+        self.assertEqual(len(ts), 20)
+
+    def test_by_week(self):
+        """
+        Test by_week for n periods.
+        """
+        ts = []
+        for i in dates.Select().by_week(from_hour=17,
+                                        from_minute=0,
+                                        to_hour=16,
+                                        to_minute=45,
+                                        period=20,
+                                        year_by_day=False,
+                                        no_days=[6]):
+            ts.append(i)
+        for i in ts:
+            start = datetime.strftime(i[0], "%Y-%m-%d %H:%M:%S%z")
+            end = datetime.strftime(i[1], "%Y-%m-%d %H:%M:%S%z")
+            print(start, end)
         self.assertEqual(len(ts), 20)
 
 

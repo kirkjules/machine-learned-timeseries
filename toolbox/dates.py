@@ -2,7 +2,7 @@ import pytz
 import logging
 import calendar
 from dateutil.tz import tzlocal
-from datetime import datetime
+from datetime import datetime, timedelta
 
 log = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class Conversion():
 
 class Select():
     """
-    Generates datetime variable sets from predefined business logic.
+    Generates datetime variable lists from predefined business logic.
     """
 
     def __init__(self, from_=None, to=None, local_tz=None):
@@ -125,14 +125,14 @@ class Select():
     def by_calendar_year(self, no_days=[], from_hour=17, from_minute=0,
                          to_hour=17, to_minute=0, year_by_day=True, period=1):
         """
-        Generator to query y number of years where the current year is 1. The
+        Generator to query y number of years where the current year is 0. The
         function wraps the more general time_val function which validates
         appropriate start and end timestamp values for a calendar year time
         range. Returned value is a tuple of start and end datetime objects in
         UTC time converted from "America/New_York" local time defined by
         time_val dates and hour and minute arguments. Inputs are treated as
         New York time since this is where the exchange is located and therefore
-        the most appropriate place to define business logic around.
+        the most appropriate place around which to define business logic.
         """
         dP = 0
         while dP in list(range(period)):
@@ -199,20 +199,22 @@ class Select():
         # Find the index of the locator in the sorted list.
         ind = s_months.index(s_loc)
         # Use the locator index to find the month number that is immediately
-        # preceeding it in the list. This will the first start month.
+        # preceeding it in the list. This will be the first start month.
         month = s_months[ind - 1]
-        # Set the start year as the this year.
+        # Set the start year as this year.
         s_year = now.year
 
         while dP in list(range(period)):
             # Find the index of the start month in the list without the
             # locator. This is the list that will be iterated over.
             s_ind = months.index(month)
+            # Duplicate the list for dP values exceeding the original list
+            # length.
             months_ = months * (int(dP / 4) + 1)
-            # Use the index to re-find the month, not the subtraction of dP
+            # Use the index to re-find the month, note the subtraction of dP
             # set to zero for the first iteration.
             s_month = months_[s_ind - dP]
-            # Set the year to decrease with eath quarter starting in Oct.
+            # Set the year to decrease with eath October quarter.
             # Ignore for the first iteration.
             if s_month == 10 and dP != 0:
                 s_year -= 1
@@ -271,8 +273,29 @@ class Select():
             yield(utc_start, utc_end)
             dP += 1
 
-    def by_week():
-        pass
+    def by_week(self, no_days=[], from_hour=17, from_minute=0, to_hour=17,
+                to_minute=0, year_by_day=False, period=1):
+        dP = 0
+        ny_time = self.to_date.astimezone(pytz.timezone("America/New_York"))
+        ny_wd = ny_time.isoweekday()
+        ny_sunday = datetime(ny_time.year, ny_time.month, ny_time.day) -\
+            timedelta(days=ny_wd)
+        while dP in list(range(period)):
+            start = ny_sunday.replace(hour=from_hour, minute=from_minute) -\
+                timedelta(days=7 * dP)
+            start_str = datetime.strftime(start, "%Y-%m-%d %H:%M:%S")
+            utc_start = Conversion(start_str, local_tz="America/New_York"
+                                   ).utc_date
+            if dP == 0:
+                utc_end = self.to_date
+            else:
+                end = (start + timedelta(days=5)).replace(hour=to_hour,
+                                                          minute=to_minute)
+                end_str = datetime.strftime(end, "%Y-%m-%d %H:%M:%S")
+                utc_end = Conversion(end_str, local_tz="America/New_York"
+                                     ).utc_date
+            yield(utc_start, utc_end)
+            dP += 1
 
     def by_day():
         pass
