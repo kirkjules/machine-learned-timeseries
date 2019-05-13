@@ -362,14 +362,10 @@ class Select():
                 end = end.replace(hour=to_hour, minute=to_minute)
                 fmt = datetime.strftime(end, "%Y-%m-%d %H:%M:%S")
                 utc_end = Conversion(fmt, local_tz="America/New_York").utc_date
-            # Pass if start datetime value is a Friday or Saturday, or Dec 31,
-            # as this is outside business hours for all tickers.
+            # Pass if start datetime value is a Friday or Saturday, as this is
+            # outside business hours for all tickers.
             if utc_start.isoweekday() in [5, 6]:
                 s += 1
-                pass
-            elif utc_start.month == 12 and utc_start.day == 31:
-                s += 1
-                pass
             else:
                 yield(utc_start, utc_end)
             dP += 1

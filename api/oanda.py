@@ -14,6 +14,13 @@ class Candles(Api):
         weeklyAlignment.
         Refer to http://developer.oanda.com/rest-live-v20/instrument-ep/
         for parameter descriptions.
+        Api behaviour will depend on Oanda releases. Notable mentions are:
+            From and to parameters outside available ticker will return
+            closest datetime results.
+            Except where the to paramater is in the future.
+            Where an inappropriate granularity is used which exceeds the
+            maximum candle count value an error will be reported by the api
+            with a HTTP 400 status and logged by the Candles class.
         """
         super().__init__(configFile, live)
         self.instrument = instrument

@@ -28,7 +28,7 @@ if data.status != 200:
     #    :generate with dates module
     # :granularity
     # :call data via either single, threading or multiprocessing functions.
-    #    :functions wrap the oanda.Candle api function.
+    #    :functions wrap the oanda.Candles api function.
 
 # Apply indicator(s) to timeseries
     # :indicator(s)
