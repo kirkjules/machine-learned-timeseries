@@ -25,7 +25,10 @@ if data.status != 200:
 # Read in the ticker data
     # :ticker
     # :date range
+    #    :generate with dates module
     # :granularity
+    # :call data via either single, threading or multiprocessing functions.
+    #    :functions wrap the oanda.Candle api function.
 
 # Apply indicator(s) to timeseries
     # :indicator(s)

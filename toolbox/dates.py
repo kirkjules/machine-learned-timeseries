@@ -74,15 +74,24 @@ class Conversion():
 class Select():
     """
     Generates datetime variable lists from predefined business logic.
+    Limitations:
+        1. The Oanda API has a 5000 max session-per-query limit.
+        Functionality has not been written to handle this error. This will
+        result by using an inappropriate generator-granularity combination.
+        2. Small timeframe generators have preset variables that are
+        inappropriate to use with larger granularities. Resulting datetime
+        variables will not be validated with the business logic that would
+        prevent an out-of-range error.
     """
 
     def __init__(self, from_=None, to=None, local_tz=None):
         """
-        Initialise datestring arguments into UTC time.
+        Initialise datestring arguments into UTC time using the Conversion()
+        class.
         If no arguments are provided all methods will use datetime.now().
         All times are converted to UTC time.
-        :param limit: used by datetime generators to yield up-to-date time
-        range.
+        :param local_tz: allows user to specify input datetime timezone.
+        Facilitates general use.
         """
         if from_ is not None:
             self.from_date = Conversion(from_, local_tz=local_tz).utc_date
@@ -101,6 +110,9 @@ class Select():
         Oanda candles api will error if requesting data for an invalid
         timestamp, i.e. outside trading hours for a given ticker. Note, hour
         and minute params are relevant to the intended granularity.
+        Inputs are treated as New York time since this is where the exchange is
+        located, thus the most appropriate place around which to define
+        business logic.
         :param hour: 0 to 23 int value to precise the timestamp hour value.
         :param minute: 0 to 59 int value to precise the timestamp minute value.
         :param year_by_day: boolean preventing dt value returning Dec 31, 1700h
@@ -125,14 +137,9 @@ class Select():
     def by_calendar_year(self, no_days=[], from_hour=17, from_minute=0,
                          to_hour=17, to_minute=0, year_by_day=True, period=1):
         """
-        Generator to query y number of years where the current year is 0. The
-        function wraps the more general time_val function which validates
-        appropriate start and end timestamp values for a calendar year time
-        range. Returned value is a tuple of start and end datetime objects in
-        UTC time converted from "America/New_York" local time defined by
-        time_val dates and hour and minute arguments. Inputs are treated as
-        New York time since this is where the exchange is located and therefore
-        the most appropriate place around which to define business logic.
+        Function to generate yearly range datetime pairs up to current date.
+        Uses the time_val function to appropriately define the datetime value.
+        Refer to above documentation.
         """
         dP = 0
         while dP in list(range(period)):
@@ -153,7 +160,12 @@ class Select():
     def by_financial_year(self, no_days=[], from_hour=17, from_minute=0,
                           to_hour=17, to_minute=0, year_by_day=False,
                           period=1):
-
+        """
+        Function to generate yearly range datetime pairs up to current date,
+        aligned to the financial year.
+        Uses the time_val function to appropriately define the datetime value.
+        Refer to above documentation.
+        """
         dP = 0
         s = 0
         if self.to_date.astimezone(pytz.timezone("America/New_York")) <\
@@ -239,6 +251,13 @@ class Select():
     def by_month(self, no_days=[], from_hour=17, from_minute=0,
                  to_hour=17, to_minute=0, year_by_day=False,
                  period=1):
+        """
+        Function to generate monthly range datetime pairs up to current date.
+        Will subtract a year from the timestamp with each pair that ends in
+        December.
+        Uses the time_val function to appropriately define the datetime value.
+        Refer to above documentation.
+        """
         dP = 0
         now = self.to_date.astimezone(pytz.timezone("America/New_York"))
         s_loc = now.month +\
@@ -273,32 +292,87 @@ class Select():
             yield(utc_start, utc_end)
             dP += 1
 
-    def by_week(self, no_days=[], from_hour=17, from_minute=0, to_hour=17,
+    def by_week(self, no_days=[], from_hour=17, from_minute=0, to_hour=16,
                 to_minute=0, year_by_day=False, period=1):
+        """
+        Function to generate weekly range datetime pairs up to current date.
+        Set variables within the function explicitly state start and end time
+        range align with Sunday and Friday respectively, New York time.
+        Don't use with daily or greater granularity as this will query a daily
+        candle starting Friday 1700h which is out of range.
+        """
         dP = 0
+        # Take utc date and convert to NY time.
         ny_time = self.to_date.astimezone(pytz.timezone("America/New_York"))
         ny_wd = ny_time.isoweekday()
+        # Construct a reference for NY business week aligned to Sunday 1700h.
         ny_sunday = datetime(ny_time.year, ny_time.month, ny_time.day) -\
             timedelta(days=ny_wd)
         while dP in list(range(period)):
-            start = ny_sunday.replace(hour=from_hour, minute=from_minute) -\
-                timedelta(days=7 * dP)
-            start_str = datetime.strftime(start, "%Y-%m-%d %H:%M:%S")
-            utc_start = Conversion(start_str, local_tz="America/New_York"
-                                   ).utc_date
+            # Initial Sunday will not be adjsuted with dP=0.
+            start = ny_sunday - timedelta(days=7 * dP)
+            # Sunday hour and minute is aligned to inputs, default 1700h.
+            start = start.replace(hour=from_hour, minute=from_minute)
+            fmt = datetime.strftime(start, "%Y-%m-%d %H:%M:%S")
+            # Sunday datetime is converted to UTC for output.
+            utc_start = Conversion(fmt, local_tz="America/New_York").utc_date
             if dP == 0:
                 utc_end = self.to_date
             else:
-                end = (start + timedelta(days=5)).replace(hour=to_hour,
-                                                          minute=to_minute)
-                end_str = datetime.strftime(end, "%Y-%m-%d %H:%M:%S")
-                utc_end = Conversion(end_str, local_tz="America/New_York"
-                                     ).utc_date
+                end = start + timedelta(days=5)
+                end = end.replace(hour=to_hour, minute=to_minute)
+                fmt = datetime.strftime(end, "%Y-%m-%d %H:%M:%S")
+                utc_end = Conversion(fmt, local_tz="America/New_York").utc_date
             yield(utc_start, utc_end)
             dP += 1
 
-    def by_day():
-        pass
+    def by_day(self, no_days=[], from_hour=17, from_minute=0, to_hour=16,
+               to_minute=0, year_by_day=False, period=1):
+        """
+        Function to generate daily range datetime pairs up to current date.
+        Set variables within the function explicitly state start and end time
+        range align with 1700h to 1659h+1day respectively, New York time.
+        Don't use with daily or greater granularity.
+        """
+        dP = 0
+        s = 0
+        # Take UTC date and convert to NY time.
+        ny_time = self.to_date.astimezone(pytz.timezone("America/New_York"))
+        # Construct a reference for NY business day aligned to 1700h.
+        ref_time = datetime(ny_time.year, ny_time.month, ny_time.day, 17)
+        ref_time = pytz.timezone("America/New_York").localize(ref_time)
+        # Compare input time to reference time.
+        if ny_time < ref_time:
+            # If NY time less than 1700h the initial start value for the date
+            # range will be the previous day, i.e. - timedelta(days=1).
+            dP += 1
+            s += 1
+
+        while dP in list(range(period + s)):
+            # Construct start time from ref time adjusted by timedelta.
+            start = ref_time - timedelta(days=dP)
+            start = start.replace(hour=from_hour, minute=from_minute)
+            # Convert start datetime from current NY time to UTC for query.
+            fmt = datetime.strftime(start, "%Y-%m-%d %H:%M:%S")
+            utc_start = Conversion(fmt, local_tz="America/New_York").utc_date
+            if dP == s:
+                utc_end = self.to_date
+            else:
+                end = start + timedelta(days=1)
+                end = end.replace(hour=to_hour, minute=to_minute)
+                fmt = datetime.strftime(end, "%Y-%m-%d %H:%M:%S")
+                utc_end = Conversion(fmt, local_tz="America/New_York").utc_date
+            # Pass if start datetime value is a Friday or Saturday, or Dec 31,
+            # as this is outside business hours for all tickers.
+            if utc_start.isoweekday() in [5, 6]:
+                s += 1
+                pass
+            elif utc_start.month == 12 and utc_start.day == 31:
+                s += 1
+                pass
+            else:
+                yield(utc_start, utc_end)
+            dP += 1
 
     def calendar_year_to_date():
         pass
