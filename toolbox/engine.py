@@ -13,13 +13,16 @@ class DownloadWorker(Thread):
         self.func = func
         self.kwargs = kwargs
 
-    def run_single(self, from_, to):
+    def run_single(self):
         for i in self.queue:
             from_, to = i
-            self.kwargs["arguments"]["from"] = from_
-            self.kwargs["arguments"]["to"] = to
+            self.kwargs["queryParameters"]["from"] = from_
+            self.kwargs["queryParameters"]["to"] = to
             try:
-                self.func(self.kwargs())
+                self.func(self.kwargs["configfile"],
+                          self.kwargs["instrument"],
+                          self.kwargs["queryParameters"],
+                          self.kwargs["live"])
             except Exception as e:
                 log.info(e)
             finally:
