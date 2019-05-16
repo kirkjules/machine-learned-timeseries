@@ -30,6 +30,7 @@ class TestDownloadWorker(unittest.TestCase):
                     d = []
                     for j in work.queue:
                         d.append(j)
+                    #    print(j)
                     self.assertEqual(len(d), 10)
                 elif i == "kwargs":
                     self.assertEqual(len(work.kwargs), 4)
@@ -42,8 +43,27 @@ class TestDownloadWorker(unittest.TestCase):
                                   work.kwargs["instrument"],
                                   work.kwargs["queryParameters"],
                                   work.kwargs["live"])
-                    print(f.json())
                     self.assertEqual(f.status, 200)
+
+    def test_run_single(self):
+        """
+        Test download functionality for sequential engine.
+        """
+        queue = dates.Select().by_month(period=10)
+        func = oanda.Candles
+        configFile = "config.ini"
+        instrument = "AUD_JPY"
+        queryParameters = {"granularity": "M15", "smooth": True}
+        live = False
+        work = engine.DownloadWorker(queue=queue,
+                                     func=func,
+                                     configFile=configFile,
+                                     instrument=instrument,
+                                     queryParameters=queryParameters,
+                                     live=live)
+        d = {}
+        work.run_single(d)
+        self.assertEqual(len(d), 10)
 
 
 if __name__ == "__main__":

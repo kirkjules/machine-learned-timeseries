@@ -103,6 +103,12 @@ class Select():
                                                         "%Y-%m-%d %H:%M:%S"
                                                         )).utc_date
 
+    def __fmt(self, utc_start, utc_end):
+        d = {}
+        d["from"] = datetime.strftime(utc_start, "%Y-%m-%dT%H:%M:%S.%f000Z")
+        d["to"] = datetime.strftime(utc_end, "%Y-%m-%dT%H:%M:%S.%f000Z")
+        return d
+
     def time_val(self, date, no_days=[], select=0, hour=0, minute=0,
                  year_by_day=False):
         """
@@ -154,7 +160,7 @@ class Select():
                                     select=-1, hour=to_hour, minute=to_minute,
                                     year_by_day=year_by_day, no_days=no_days)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
-            yield(utc_start, utc_end)
+            yield self.__fmt(utc_start, utc_end)
             dP += 1
 
     def by_financial_year(self, no_days=[], from_hour=17, from_minute=0,
@@ -187,7 +193,7 @@ class Select():
                                     select=-1, hour=to_hour, minute=to_minute,
                                     year_by_day=year_by_day, no_days=no_days)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
-            yield(utc_start, utc_end)
+            yield self.__fmt(utc_start, utc_end)
             dP += 1
 
     def by_quarter(self, no_days=[], from_hour=17, from_minute=0,
@@ -245,7 +251,7 @@ class Select():
                                     select=-1, hour=to_hour, minute=to_minute,
                                     year_by_day=year_by_day, no_days=no_days)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
-            yield(utc_start, utc_end)
+            yield self.__fmt(utc_start, utc_end)
             dP += 1
 
     def by_month(self, no_days=[], from_hour=17, from_minute=0,
@@ -289,7 +295,7 @@ class Select():
                                     select=-1, hour=to_hour, minute=to_minute,
                                     year_by_day=year_by_day, no_days=no_days)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
-            yield(utc_start, utc_end)
+            yield self.__fmt(utc_start, utc_end)
             dP += 1
 
     def by_week(self, no_days=[], from_hour=17, from_minute=0, to_hour=16,
@@ -323,7 +329,7 @@ class Select():
                 end = end.replace(hour=to_hour, minute=to_minute)
                 fmt = datetime.strftime(end, "%Y-%m-%d %H:%M:%S")
                 utc_end = Conversion(fmt, local_tz="America/New_York").utc_date
-            yield(utc_start, utc_end)
+            yield self.__fmt(utc_start, utc_end)
             dP += 1
 
     def by_day(self, no_days=[], from_hour=17, from_minute=0, to_hour=16,
@@ -367,7 +373,7 @@ class Select():
             if utc_start.isoweekday() in [5, 6]:
                 s += 1
             else:
-                yield(utc_start, utc_end)
+                yield self.__fmt(utc_start, utc_end)
             dP += 1
 
     def calendar_year_to_date():

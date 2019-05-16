@@ -8,25 +8,47 @@ log = logging.getLogger(__name__)
 class DownloadWorker(Thread):
 
     def __init__(self, queue, func, **kwargs):
+        """
+        :param queue: an iterable containing dictionary items whose keys
+        correspond to the target api queryParameters. These queryParameters are
+        contained in a dictionary argument that is parsed to the func that
+        wraps the api. The parameter argument used by func is parsed as a
+        kwarg.
+        :param func: the function that wraps the api  whose arguments are
+        parsed as kwargs.
+        :param kwargs: where func arguments are parsed. One of these arguments
+        will be the queryParameters dictionary that is modified by data present
+        in the queue.
+        """
         Thread.__init__(self)
         self.queue = queue
         self.func = func
         self.kwargs = kwargs
 
-    def run_single(self):
-        for i in self.queue:
-            from_, to = i
-            self.kwargs["queryParameters"]["from"] = from_
-            self.kwargs["queryParameters"]["to"] = to
+    def run_single(self, d):
+        """
+        Functional to sequential download ticker data as defined by each
+        dataset in the iterable self.queue.
+        The functional intential uses a for loop. For more optimized methods
+        threading and multiprocessing options are defined below.
+        """
+        for parameter_set in self.queue:
+            for parameter in parameter_set.keys():
+                self.kwargs["queryParameters"][parameter] = \
+                        parameter_set[parameter]
             try:
-                self.func(self.kwargs["configfile"],
-                          self.kwargs["instrument"],
-                          self.kwargs["queryParameters"],
-                          self.kwargs["live"])
+                data = self.func(self.kwargs["configFile"],
+                                 self.kwargs["instrument"],
+                                 self.kwargs["queryParameters"],
+                                 self.kwargs["live"])
             except Exception as e:
                 log.info(e)
             finally:
-                print("Completed.")
+                d[self.kwargs["queryParameters"]["from"]] = data.json()
+                print("Completed: {0} to {1}".format(
+                    self.kwargs["queryParameters"]["from"],
+                    self.kwargs["queryParameters"]["to"]))
+                print("{0} {1}".format(data.status, len(data.df())))
 
     def run_thread(self):
         while True:
