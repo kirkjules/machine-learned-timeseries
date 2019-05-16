@@ -18,7 +18,9 @@ class TestDownloadWorker(unittest.TestCase):
         instrument = "AUD_JPY"
         queryParameters = {"granularity": "M15", "smooth": True}
         live = False
-        work = engine.DownloadWorker(queue=queue,
+        d = {}
+        work = engine.DownloadWorker(d=d,
+                                     queue=queue,
                                      func=func,
                                      configFile=configFile,
                                      instrument=instrument,
@@ -49,20 +51,21 @@ class TestDownloadWorker(unittest.TestCase):
         """
         Test download functionality for sequential engine.
         """
+        d = {}
         queue = dates.Select().by_month(period=10)
         func = oanda.Candles
         configFile = "config.ini"
         instrument = "AUD_JPY"
         queryParameters = {"granularity": "M15", "smooth": True}
         live = False
-        work = engine.DownloadWorker(queue=queue,
+        work = engine.DownloadWorker(d=d,
+                                     queue=queue,
                                      func=func,
                                      configFile=configFile,
                                      instrument=instrument,
                                      queryParameters=queryParameters,
                                      live=live)
-        d = {}
-        work.run_single(d)
+        work.run_single()
         self.assertEqual(len(d), 10)
 
 
