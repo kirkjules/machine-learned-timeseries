@@ -33,7 +33,9 @@ class Candles(Api):
         self.status = self.r.status_code
 
         if self.r.status_code != 200:
-            log.info(str(exceptions.Oanda(obj=self.r)))
+            raise exceptions.OandaError("The instrument.Candles endpoint has\
+                                        returned the follow error: {}"
+                                        .format(r.json()["errorMessage"]))
 
     def json(self):
         return self.r.json()
