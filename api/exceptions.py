@@ -2,22 +2,32 @@ class ApiError(Exception):
     """
     Exception raised when an api function returns an error message.
     Raised for instance where an invalid token returns an insufficient
-    authorization error from the endpoint, or when the underlying requests
-    library returns an error.
-    :ivar cause: the cause of the exception being raised, when not none this
-                 will itself be an exception instance, this is useful for
-                 creating a chain of exceptions for versions of python where
-                 this is not yet implemented/supported natively.
-                 (ref. "https://github.com/openstack/tooz")
+    authorization error from the endpoint.
+    The ApiError should be used as a place holder throughout development with
+    a locally defined error message.
+    Eventually endpoint functions should contain a specifically defined error
+    class that inherits from ApiError.
     """
-    def __init__(self, message, cause=None):
-        super().__init__(message)
-        self.cause = cause
+    def __init__(self, msg):
+        super().__init__(msg)  # references/keeps the inherited variables.
+        self.msg = msg
+
+    def __str__(self):
+        return self.msg
 
 
 class OandaError(ApiError):
     """
     Exception raised when function interacting with the Oanda api returns
     an endpoint error message.
+    :param msg: Function appropriate message.
+    :param oanda_msg: requests.json object containing the Oanda api response.
     """
-    pass
+    def __init__(self, msg, oanda_msg, status_code):
+        super().__init__(msg)
+        self.oanda_msg = oanda_msg["errorMessage"]
+        self.status_code = status_code
+        self.message = "{}: {}".format(self.msg, self.oanda_msg)
+
+    def __str__(self):
+        return self.message

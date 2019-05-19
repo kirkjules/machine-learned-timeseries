@@ -2,7 +2,7 @@ import os
 import pandas
 import unittest
 import logging
-from api import oanda
+from api import oanda, exceptions
 
 logging.basicConfig(level=logging.INFO)
 
@@ -24,7 +24,7 @@ class TestCandles(unittest.TestCase):
 
     def test_oanda_response(self):
         """
-        Test Oanda error message logging.
+        Test forced Oanda http responses.
         """
         cf = "config.ini"
         arguments = {"count": "6", "price": "M", "granularity": "S5"}
@@ -37,11 +37,14 @@ class TestCandles(unittest.TestCase):
 
         for i in errors.keys():
             with self.subTest(i=i):
-                data = oanda.Candles(cf,
-                                     errors[i]["ticker"],
-                                     errors[i]["arguments"],
-                                     errors[i]["live"])
-                self.assertEqual(data.r.status_code, i)
+                try:
+                    oanda.Candles(cf,
+                                  errors[i]["ticker"],
+                                  errors[i]["arguments"],
+                                  errors[i]["live"])
+                except exceptions.OandaError as e:
+                    print(e)
+                    self.assertEqual(e.status_code, i)
 
     def test_out(self):
         """
