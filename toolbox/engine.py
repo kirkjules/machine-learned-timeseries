@@ -1,7 +1,7 @@
-import dates
+# import json
 import logging
-# from pprint import pprint
-from api import oanda
+from . import dates
+from api import oanda, exceptions
 from queue import Queue
 from threading import Thread, Lock
 
@@ -73,21 +73,24 @@ class DownloadWorker(Thread):
             for parameter in parameter_set.keys():
                 self.kwargs["queryParameters"][parameter] = \
                         parameter_set[parameter]
-                try:
-                    data = self.func(self.kwargs["configFile"],
-                                     self.kwargs["instrument"],
-                                     self.kwargs["queryParameters"],
-                                     self.kwargs["live"])
-                except Exception as e:
-                    log.info(e)
-                finally:
-                    msg = "Ticker data from {0} to {1} processed.".format(
-                        self.kwargs["queryParameters"]["from"],
-                        self.kwargs["queryParameters"]["to"])
-                    log.info(msg)
-                    # print("From: {}".format(self.kwargs["queryParameters"]
-                    #                        ["from"]))
-                    return(data.df())
+            log.info("Call commenced with queryParameters: {}"
+                     .format(self.kwargs["queryParameters"]))
+            try:
+                data = self.func(self.kwargs["configFile"],
+                                 self.kwargs["instrument"],
+                                 self.kwargs["queryParameters"],
+                                 self.kwargs["live"])
+            except exceptions.OandaError as e:
+                log.info(e.oanda_msg)
+                resp = e.oanda_msg
+            else:
+                msg = "Ticker data from {0} to {1} processed.".format(
+                    self.kwargs["queryParameters"]["from"],
+                    self.kwargs["queryParameters"]["to"])
+                log.info(msg)
+                resp = data.df()
+            finally:
+                return resp
 
     def __threader(self, d):
         while True:
@@ -107,7 +110,7 @@ class DownloadWorker(Thread):
             thread = Thread(target=self.__threader, args=(self.d,))
             # this ensures the thread will die when the main thread dies
             # can set t.daemon to False to keep running
-            thread.daemon = False
+            thread.daemon = True
             thread.start()
             t.append(thread)
 
@@ -133,6 +136,8 @@ class DownloadWorker(Thread):
 
 
 if __name__ == "__main__":
+    f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    logging.basicConfig(level=logging.INFO, format=f)
     kwargs = {"configFile": "config.ini",
               "instrument": "AUD_JPY",
               "queryParameters": {"granularity": "D"},
@@ -147,5 +152,5 @@ if __name__ == "__main__":
                    instrument="AUD_JPY",
                    queryParameters={"granularity": "D"},
                    live=False).run_concurrently()
-    for f in d.keys():
-        print(d[f].head(5))
+    # for f in d.keys():
+    #     print(d[f].tail(5))
