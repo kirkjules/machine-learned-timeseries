@@ -1,8 +1,8 @@
-# import json
 import copy
 import logging
 import dates
 import multiprocessing
+from pprint import pprint
 from api import oanda, exceptions
 from queue import Queue
 from threading import Thread, Lock
@@ -148,10 +148,13 @@ class ParallelWorker(Worker):
         instrument = iterable[1]["instrument"]
         queryParameters = iterable[1]["queryParameters"]
         live = iterable[1]["live"]
+        resp = None
         try:
             data = func(configFile, instrument, queryParameters, live)
         except exceptions.OandaError as e:
             resp = e.oanda_msg
+        except Exception as e:
+            resp = e
         else:
             resp = data.df().head(5)
         finally:
@@ -169,16 +172,20 @@ class ParallelWorker(Worker):
             sub_list.append(self.kwargs)  # kwargs)
             arg_list.append(copy.deepcopy(sub_list))
 
-        pool = multiprocessing.Pool(processes=4)
-        for i in pool.map(self.target, arg_list):
-            pprint(i)
-        pool.close()
-        pool.join()
+        with multiprocessing.Manager() as manager:
+            ml = manager.list(arg_list)
+            pool = multiprocessing.Pool(processes=4)
+            for i in pool.map(self.target, ml):
+                pprint(i)
+            # for i in pool.map(self.target, l):
+            #    pprint(i)
+            pool.close()
+            pool.join()
 
 
 if __name__ == "__main__":
     import time
-    from pprint import pprint
+    # from pprint import pprint
     f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     logging.basicConfig(level=logging.INFO, format=f)
     kwargs = {"configFile": "config.ini",
