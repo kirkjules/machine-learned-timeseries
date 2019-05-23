@@ -1,6 +1,8 @@
+import os
 import copy
 import logging
 import dates
+# import functools
 import multiprocessing
 from pprint import pprint
 from api import oanda, exceptions
@@ -141,6 +143,10 @@ class ParallelWorker(Worker):
     def __init__(self, date_gen, func, **kwargs):
         super().__init__(self, date_gen, func, **kwargs)
 
+    def init_lock(self, l_):
+        global lock
+        lock = l_
+
     def target(self, iterable):
         k = {}
         func = iterable[0]
@@ -159,6 +165,13 @@ class ParallelWorker(Worker):
             resp = data.df().head(5)
         finally:
             k[(queryParameters["from"], queryParameters["to"])] = resp
+            lock.acquire()
+            log.info("{0}, {1}: {2}".format(os.getpid(),
+                                            queryParameters["from"]
+                                            .replace(".000000000Z", ""),
+                                            queryParameters["to"]
+                                            .replace(".000000000Z", "")))
+            lock.release()
         return k
 
     def run_parallel(self):  # (d, date_gen, func, **kwargs)
@@ -172,15 +185,18 @@ class ParallelWorker(Worker):
             sub_list.append(self.kwargs)  # kwargs)
             arg_list.append(copy.deepcopy(sub_list))
 
-        with multiprocessing.Manager() as manager:
-            ml = manager.list(arg_list)
-            pool = multiprocessing.Pool(processes=4)
-            for i in pool.map(self.target, ml):
-                pprint(i)
-            # for i in pool.map(self.target, l):
-            #    pprint(i)
-            pool.close()
-            pool.join()
+        ml = arg_list
+        l_ = multiprocessing.Lock()
+        pool = multiprocessing.Pool(processes=4,
+                                    initializer=self.init_lock,
+                                    initargs=(l_,))
+        results = []
+        for i in pool.map(self.target, ml):
+            results.append(i)
+
+        pool.close()
+        pool.join()
+        pprint(results)
 
 
 if __name__ == "__main__":
