@@ -1,6 +1,8 @@
 # import json
 import logging
-from . import dates
+import dates
+import multiprocessing
+import functools
 from api import oanda, exceptions
 from queue import Queue
 from threading import Thread, Lock
@@ -136,6 +138,8 @@ class DownloadWorker(Thread):
 
 
 if __name__ == "__main__":
+    import time
+    from pprint import pprint
     f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     logging.basicConfig(level=logging.INFO, format=f)
     kwargs = {"configFile": "config.ini",
@@ -145,12 +149,119 @@ if __name__ == "__main__":
     func = oanda.Candles
     date_gen = dates.Select().by_month(period=5)
     d = {}
+    configFile = "config.ini"
+    instrument = "AUD_JPY"
+    queryParameters = {"granularity": "D"}
+    live = False
+    """
+    start_time = time.time()
     DownloadWorker(d=d,
                    date_gen=date_gen,
                    func=func,
-                   configFile="config.ini",
-                   instrument="AUD_JPY",
-                   queryParameters={"granularity": "D"},
-                   live=False).run_concurrently()
+                   configFile=configFile,  # "config.ini",
+                   instrument=instrument,  # "AUD_JPY",
+                   queryParameters=queryParameters,  # {"granularity": "D"},
+                   live=live).run_concurrently()  # .run_concurrently()
+    print("--- %s seconds ---" % (time.time() - start_time))
     # for f in d.keys():
     #     print(d[f].tail(5))
+    """
+
+    def target(parameter_set, func, configFile, instrument, queryParameters,
+               live=False):
+        # lock.acquire()
+        for parameter in parameter_set.keys():
+            queryParameters[parameter] = parameter_set[parameter]
+        log.info("Call commenced with queryParameters: {}"
+                 .format(queryParameters))
+        try:
+            data = func(configFile, instrument, queryParameters, live)
+        except exceptions.OandaError as e:
+            log.info(e.oanda_msg)
+            resp = e.oanda_msg
+        else:
+            msg = "Ticker data from {0} to {1} processed.".format(
+                queryParameters["from"],
+                queryParameters["to"])
+            log.info(msg)
+            resp = data.df()
+        finally:
+            # lock.release()
+            return resp
+
+    def init(l):
+        global lock
+        lock = l
+
+    def main_partial(func, configFile, instrument, queryParameters, live):
+        iterable = []
+        for i in dates.Select().by_month(period=5):
+            iterable.append(i)
+        # l_ = multiprocessing.Lock()
+        # pool = multiprocessing.Pool(initializer=init, initargs=(l_,))
+        pool = multiprocessing.Pool(processes=4)
+        pool.map(functools.partial(target,
+                                   func=func,
+                                   configFile=configFile,  # "config.ini",
+                                   instrument=instrument,  # "AUD_JPY",
+                                   queryParameters=queryParameters,
+                                   live=live), iterable)
+        pool.close()
+        pool.join()
+
+    def target_test(iterable):
+        k = {}
+        # k["func"]
+        func = iterable[0]
+        # k["configFile"]
+        configFile = iterable[1]["configFile"]
+        # k["instrument"]
+        instrument = iterable[1]["instrument"]
+        # k["queryParameters"]
+        queryParameters = iterable[1]["queryParameters"]
+        # k["live"]
+        live = iterable[1]["live"]
+        try:
+            data = func(configFile, instrument, queryParameters, live)
+        except exceptions.OandaError as e:
+            resp = e.oanda_msg
+        else:
+            resp = data.df().head(5)
+        finally:
+            k[queryParameters] = resp
+        return k
+
+    def main_complete(d, date_gen, func, **kwargs):
+        arg_list = []
+        for parameter_set in date_gen:
+            sub_list = []
+            sub_list.append(func)
+            qP = kwargs.copy()
+            for parameter in parameter_set:
+                qP["queryParameters"][parameter] = \
+                        parameter_set[parameter]
+            sub_list.append(qP)  # kwargs)
+            # sub_list.append(parameter_set)
+            arg_list.append(sub_list)
+
+        pool = multiprocessing.Pool(processes=4)
+        for i in pool.map(target_test, arg_list):
+            pprint(i)
+        pool.close()
+        pool.join()
+
+        return d
+        # configFile, instrument, queryParameters, live
+
+    main_complete(d=d, date_gen=date_gen, func=func, configFile=configFile,
+                  instrument=instrument, queryParameters=queryParameters,
+                  live=live)
+    """
+    start_time = time.time()
+    main_partial(func=func,
+                 configFile=configFile,  # "config.ini",
+                 instrument=instrument,  # "AUD_JPY",
+                 queryParameters=queryParameters,
+                 live=live)
+    print("--- %s seconds ---" % (time.time() - start_time))
+    """
