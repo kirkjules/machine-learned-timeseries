@@ -116,6 +116,10 @@ class ConcurrentWorker(Worker):  # Thread
             self.__q.task_done()
 
     def run(self):
+        """
+        Method to run the target function as wrapped by __thread_func and
+        directed by __threader, concurrently, on multiple threads.
+        """
         t = []
         results = []
         for i in range(4):
