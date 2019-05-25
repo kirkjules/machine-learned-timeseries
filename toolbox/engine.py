@@ -1,8 +1,8 @@
 import os
 import copy
 import logging
-import dates
 import multiprocessing
+from . import dates
 from queue import Queue
 # from pprint import pprint
 from api import oanda, exceptions
@@ -34,7 +34,7 @@ class Worker(Thread):
             sub_list.append(self.kwargs)  # kwargs)
             self.arg_list.append(copy.deepcopy(sub_list))
 
-    def run_single(self):
+    def run(self):
         """
         Function to sequentially download ticker data as defined by each
         dataset in the iterable self.arg_list.
@@ -53,12 +53,13 @@ class Worker(Thread):
                 data = func(configFile, instrument, queryParameters, live)
             except exceptions.OandaError as e:
                 resp = e.oanda_msg
-            except Exception as e:
+            except exceptions.ApiError as e:
                 resp = e
+                log.info(resp)
             else:
                 resp = data.df().head(5)
             finally:
-                log.info("{0}, {1}: {2}, {3}".format(
+                log.info("{0}, {1}: {2}".format(
                     os.getpid(), queryParameters["from"]
                     .replace(".000000000Z", ""), queryParameters["to"]
                     .replace(".000000000Z", "")))
@@ -91,8 +92,10 @@ class ConcurrentWorker(Worker):  # Thread
             data = func(configFile, instrument, queryParameters, live)
         except exceptions.OandaError as e:
             resp = e.oanda_msg
-        except Exception as e:
+        except exceptions.ApiError as e:
             resp = e
+            with self.__lock:
+                log.info(resp)
         else:
             resp = data.df()
         finally:
@@ -172,8 +175,11 @@ class ParallelWorker(Worker):
             data = func(configFile, instrument, queryParameters, live)
         except exceptions.OandaError as e:
             resp = e.oanda_msg
-        except Exception as e:
+        except exceptions.ApiError as e:
+            lock.acquire()
             resp = e
+            log.info(resp)
+            lock.release()
         else:
             resp = data.df()
         finally:

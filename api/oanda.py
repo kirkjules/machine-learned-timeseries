@@ -27,16 +27,25 @@ class Candles(Api):
         self.queryParameters = queryParameters
         self.url = self.base + "instruments/{0}/candles?".format(
             self.instrument)
-        self.r = requests.get(self.url,
-                              headers=self.headers,
-                              params=self.queryParameters)
-        self.status = self.r.status_code
+        try:
+            self.r = requests.get(self.url,
+                                  headers=self.headers,
+                                  params=self.queryParameters)
+        except requests.exceptions.RequestException as e:
+            exc = exceptions.ApiError("There has been an error connecting"
+                                      " with the api endpoint as raised by: "
+                                      " {}".format(e))
+            # log.info(exc)
+            raise exc from None
+        else:
+            self.status = self.r.status_code
 
-        if self.r.status_code != 200:
-            raise exceptions.OandaError(
-              "The instrument.Candles endpoint has returned the follow error",
-              self.r.json(),
-              status_code=self.r.status_code)
+            if self.r.status_code != 200:
+                raise exceptions.OandaError(
+                  "The instrument.Candles endpoint has returned the following"
+                  " error",
+                  self.r.json(),
+                  status_code=self.r.status_code)
 
     def json(self):
         return self.r.json()

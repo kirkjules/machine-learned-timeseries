@@ -9,6 +9,19 @@ logging.basicConfig(level=logging.INFO)
 
 class TestCandles(unittest.TestCase):
 
+    def test_requests_exception(self):
+        """
+        Test request library extension raising.
+        """
+
+        ticker = "EUR_USD"
+        arguments = {"count": "6", "price": "M", "granularity": "S5"}
+        cf = "config.ini"
+        live = False
+
+        with self.assertRaises(exceptions.ApiError):
+            oanda.Candles(cf, ticker, arguments, live)
+
     def test_response(self):
         """
         Test HTTP response type.
@@ -72,8 +85,8 @@ class TestCandles(unittest.TestCase):
                     self.assertEqual(type(data), out[i])
 
                 elif i == "csv":
-                    r.df(outFile="tests/testapi/testoanda/out/out.csv")
-                    out_dir = os.listdir("tests/testapi/testoanda/out/")
+                    r.df(outFile="tests/testapi/out/out.csv")
+                    out_dir = os.listdir("tests/testapi/out/")
                     filename, file_ext = os.path.splitext(out_dir[0])
                     self.assertEqual(file_ext, ".csv")
 
