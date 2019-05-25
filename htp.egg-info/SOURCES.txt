@@ -1,5 +1,6 @@
 README.md
 setup.py
+analyse/__init__.py
 api/__init__.py
 api/exceptions.py
 api/oanda.py
@@ -11,3 +12,4 @@ htp.egg-info/requires.txt
 htp.egg-info/top_level.txt
 toolbox/__init__.py
 toolbox/dates.py
+toolbox/engine.py
