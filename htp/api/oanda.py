@@ -41,7 +41,7 @@ class Candles(Api):
             exc = exceptions.ApiError("There has been an error connecting"
                                       " with the api endpoint as raised by: "
                                       " {}".format(e))
-            # log.info(exc)
+            log.info(exc)
             raise exc from None
         else:
             self.status = self.r.status_code

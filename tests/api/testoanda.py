@@ -17,13 +17,12 @@ class TestCandles(unittest.TestCase):
 
         ticker = "EUR_USD"
         arguments = {"count": "6", "price": "M", "granularity": "S5"}
-        cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
+        # cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
         # print(cf)
         # live = False
 
         with self.assertRaises(exceptions.ApiError):
-            oanda.Candles(configFile=cf,
-                          instrument=ticker,
+            oanda.Candles(instrument=ticker,
                           queryParameters=arguments)
 
     def test_response(self):
