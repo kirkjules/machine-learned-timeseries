@@ -1,3 +1,0 @@
-[console_scripts]
-candles = api.scripts.candles:clickData
-

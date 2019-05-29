@@ -10,6 +10,7 @@ setup(
         'Requests',
         'Pandas'
     ],
+    scripts=["bin/htp"],
     entry_points={
         "console_scripts": ["candles=api.scripts.candles:clickData"],
     }

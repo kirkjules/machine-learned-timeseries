@@ -1,30 +1,41 @@
 import logging
-from api import oanda
-from toolbox import dates, engine
+from pprint import pprint
+from htp.api import oanda
+from htp.toolbox import dates, engine
 
 f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 # logging.basicConfig(level=logging.INFO, format=f)
-logger = logging.getLogger("toolbox.engine")
+logger = logging.getLogger("htp.toolbox.engine")
 logger.setLevel(level=logging.INFO)
 fh = logging.StreamHandler()
 fh_formatter = logging.Formatter(f)
 fh.setFormatter(fh_formatter)
 logger.addHandler(fh)
 
-kwargs = {"configFile": "config.ini",
-          "instrument": "AUD_JPY",
-          "queryParameters": {"granularity": "D"},
-          "live": False}
-func = oanda.Candles
-date_gen = dates.Select().by_month(period=5)
-d = {}
-engine.DownloadWorker(d=d,
-                      date_gen=date_gen,
-                      func=func,
-                      configFile="config.ini",
-                      instrument="AUD_JPY",
-                      queryParameters={"granularity": "D"},
-                      live=False).run_concurrently()
+
+def main():
+
+    configFile = "./config.ini"
+    instrument = "AUD_JPY"
+    queryParameters = {"granularity": "D"}
+    live = False
+    func = oanda.Candles
+    date_list = []
+    for i in dates.Select().by_month(period=5):
+        date_list.append(i)
+
+    data = engine.ParallelWorker(date_gen=date_list,
+                                 func=func,
+                                 configFile=configFile,
+                                 instrument=instrument,
+                                 queryParameters=queryParameters,
+                                 live=live).run()
+
+    pprint(data)
+
+
+if __name__ == "__main__":
+    main()
 
 # ["AUD_CAD", "NZD_USD", "NZD_JPY", "AUD_JPY", "AUD_NZD",
 # "AUD_USD", "USD_JPY", "USD_CHF", "GBP_CHF", "NZD_CAD", "CAD_JPY",

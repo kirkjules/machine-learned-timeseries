@@ -5,7 +5,7 @@ import multiprocessing
 from . import dates
 from queue import Queue
 # from pprint import pprint
-from api import oanda, exceptions
+from htp.api import oanda, exceptions
 from threading import Thread, Lock
 
 log = logging.getLogger(__name__)
