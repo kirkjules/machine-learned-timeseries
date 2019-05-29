@@ -2,7 +2,8 @@ import os
 import pandas
 import unittest
 import logging
-from api import oanda, exceptions
+from pprint import pprint
+from htp.api import oanda, exceptions
 
 logging.basicConfig(level=logging.INFO)
 
@@ -16,23 +17,30 @@ class TestCandles(unittest.TestCase):
 
         ticker = "EUR_USD"
         arguments = {"count": "6", "price": "M", "granularity": "S5"}
-        cf = "config.ini"
-        live = False
+        cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
+        # print(cf)
+        # live = False
 
         with self.assertRaises(exceptions.ApiError):
-            oanda.Candles(cf, ticker, arguments, live)
+            oanda.Candles(configFile=cf,
+                          instrument=ticker,
+                          queryParameters=arguments)
 
     def test_response(self):
         """
         Test HTTP response type.
         """
 
+        # ticker = "EUR_USD"
+        # arguments = {"count": "6", "price": "M", "granularity": "S5"}
+        # cf = "config.ini"
+        # live = False
         ticker = "EUR_USD"
         arguments = {"count": "6", "price": "M", "granularity": "S5"}
-        cf = "config.ini"
-        live = False
-
-        data = oanda.Candles(cf, ticker, arguments, live)
+        cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
+        data = oanda.Candles(configFile=cf, instrument=ticker,
+                             queryParameters=arguments)
+        pprint(data.json())
         self.assertEqual(data.r.status_code, 200)
 
     def test_oanda_response(self):

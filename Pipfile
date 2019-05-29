@@ -11,6 +11,7 @@ requests = "*"
 click = "*"
 setuptools = "*"
 pandas = "*"
+pyyaml = "*"
 
 [requires]
 python_version = "3.7"

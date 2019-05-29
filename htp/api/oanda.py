@@ -8,7 +8,9 @@ log = logging.getLogger(__name__)
 
 class Candles(Api):
 
-    def __init__(self, configFile, instrument, queryParameters, live):
+    def __init__(self, configFile="config.yaml", api="oanda",
+                 access="practise", **kwargs):
+        # configFile, instrument, queryParameters, live):
         """Request query parameters are: price, granularity, count,
         from, to, smooth, includeFirst, dailyAlignment, alignmentTimezone,
         weeklyAlignment.
@@ -22,11 +24,15 @@ class Candles(Api):
             maximum candle count value an error will be reported by the api
             with a HTTP 400 status and logged by the Candles class.
         """
-        super().__init__(configFile, live)
-        self.instrument = instrument
-        self.queryParameters = queryParameters
-        self.url = self.base + "instruments/{0}/candles?".format(
+        super().__init__(configFile, api, access, **kwargs)  # configFile, live
+        self.headers = {"Content-Type": "application/json",
+                        "Authorization": "Bearer {0}"
+                        .format(self.details["token"])}
+        self.instrument = kwargs["instrument"]
+        self.url = self.details["url"] + "instruments/{0}/candles?".format(
             self.instrument)
+        self.queryParameters = kwargs["queryParameters"]
+
         try:
             self.r = requests.get(self.url,
                                   headers=self.headers,
