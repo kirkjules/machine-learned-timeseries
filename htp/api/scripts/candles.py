@@ -1,9 +1,16 @@
 import click
-from api import oanda
+from htp.api import oanda
+from datetime import datetime
+
+
+def fmt(date):
+    # obj = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+    str_ = datetime.strftime(date, "%Y-%m-%dT%H:%M:%S.%f000Z")
+    return str_
 
 
 @click.command()
-@click.argument("cf", type=click.Path(exists=True))
+@click.argument("filename", type=click.STRING)
 @click.argument("ticker", type=click.STRING)
 @click.option("--price",
               default="M",
@@ -64,20 +71,15 @@ from api import oanda
               Candlesticks with daily alignment will be aligned to the\
               dailyAlignment hour within the alignmentTimezone. Note that\
               the returned times will still be represented in UTC.")
-@click.option("--live",
-              default=False,
-              type=click.BOOL,
-              help="Select which Oanda enviroment to action commands in,\
-              i.e. Live or Practice.")
-def clickData(cf, ticker, price, granularity, count, from_, to, smooth,
+def clickData(filename, ticker, price, granularity, count, from_, to, smooth,
               includefirst, dailyalignment, weeklyalignment,
-              alignmenttimezone, live):
+              alignmenttimezone):
 
     arguments = {"price": price,
                  "granularity": granularity,
                  "count": count,
-                 "from": from_,
-                 "to": to,
+                 "from": fmt(from_),
+                 "to": fmt(to),
                  "smooth": smooth,
                  "includeFirst": includefirst,
                  "dailyAlignment": dailyalignment,
@@ -91,5 +93,6 @@ def clickData(cf, ticker, price, granularity, count, from_, to, smooth,
     else:
         del arguments["count"]
 
-    r = oanda.Candles(click.format_filename(cf), ticker, arguments, live)
-    click.echo(r.json())
+    r = oanda.Candles(**{"instrument": ticker, "queryParameters": arguments})
+    r.df(filename=filename)
+    click.echo("Download complete")

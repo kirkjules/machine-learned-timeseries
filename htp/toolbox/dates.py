@@ -28,7 +28,7 @@ Note: any actions logged will be in UTC time. If the user needs a timestamp\
 """
 
 
-class Conversion():
+class Conversion:
 
     def __init__(self, date, local_tz=None, conv_tz=None):
         """
@@ -71,7 +71,7 @@ class Conversion():
         # '2019-04-24T13:18:16+0700'
 
 
-class Select():
+class Select:
     """
     Generates datetime variable lists from predefined business logic.
     Limitations:
@@ -109,7 +109,8 @@ class Select():
         d["to"] = datetime.strftime(utc_end, "%Y-%m-%dT%H:%M:%S.%f000Z")
         return d
 
-    def time_val(self, date, no_days=[], select=0, hour=0, minute=0,
+    @staticmethod
+    def time_val(date, no_days=[], select=0, hour=0, minute=0,
                  year_by_day=False):
         """
         Business logic for validating an appropriate query time variable.

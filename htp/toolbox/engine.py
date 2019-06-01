@@ -2,10 +2,8 @@ import os
 import copy
 import logging
 import multiprocessing
-from . import dates
-from queue import Queue
 # from pprint import pprint
-from htp.api import oanda, exceptions
+from queue import Queue
 from threading import Thread, Lock
 
 log = logging.getLogger(__name__)
@@ -26,12 +24,15 @@ class Worker(Thread):
         self.kwargs = kwargs
         self.arg_list = []
         for parameter_set in self.date_gen:
-            sub_list = []
-            sub_list.append(self.func)
+            sub_list = {}  # []
+            # sub_list.append(self.func)
+            sub_list["func"] = self.func
             for parameter in parameter_set.keys():
                 self.kwargs["queryParameters"][parameter] = \
                         parameter_set[parameter]
-            sub_list.append(self.kwargs)  # kwargs)
+            # sub_list.append(self.kwargs)  # kwargs)
+            for argument in self.kwargs.keys():
+                sub_list[argument] = self.kwargs[argument]
             self.arg_list.append(copy.deepcopy(sub_list))
 
     def run(self):
@@ -43,26 +44,22 @@ class Worker(Thread):
         """
         results = []
         for iterable in self.arg_list:
-            func = iterable[0]
-            configFile = iterable[1]["configFile"]
-            instrument = iterable[1]["instrument"]
-            queryParameters = iterable[1]["queryParameters"]
-            live = iterable[1]["live"]
+            func = iterable.pop("func")
             resp = None
             try:
-                data = func(configFile, instrument, queryParameters, live)
+                data = func(**iterable)
             except exceptions.OandaError as e:
                 resp = e.oanda_msg
             except exceptions.ApiError as e:
                 resp = e
                 log.info(resp)
             else:
-                resp = data.df().head(5)
+                resp = data.df()
             finally:
                 log.info("{0}, {1}: {2}".format(
-                    os.getpid(), queryParameters["from"]
-                    .replace(".000000000Z", ""), queryParameters["to"]
-                    .replace(".000000000Z", "")))
+                    os.getpid(), iterable["queryParameters"]["from"]
+                    .replace(".000000000Z", ""), iterable["queryParameters"]
+                    ["to"].replace(".000000000Z", "")))
                 results.append(resp)  # k
 
         return results
@@ -82,14 +79,10 @@ class ConcurrentWorker(Worker):  # Thread
         jobs. Specifically it is a list type item whose values correspond to
         arguments in the target api function.
         """
-        func = iterable[0]
-        configFile = iterable[1]["configFile"]
-        instrument = iterable[1]["instrument"]
-        queryParameters = iterable[1]["queryParameters"]
-        live = iterable[1]["live"]
+        func = iterable.pop("func")
         resp = None
         try:
-            data = func(configFile, instrument, queryParameters, live)
+            data = func(**iterable)
         except exceptions.OandaError as e:
             resp = e.oanda_msg
         except exceptions.ApiError as e:
@@ -101,9 +94,9 @@ class ConcurrentWorker(Worker):  # Thread
         finally:
             with self.__lock:
                 log.info("{0}, {1}: {2}".format(
-                    os.getpid(), queryParameters["from"]
-                    .replace(".000000000Z", ""), queryParameters["to"]
-                    .replace(".000000000Z", "")))
+                    os.getpid(), iterable["queryParameters"]["from"]
+                    .replace(".000000000Z", ""), iterable["queryParameters"]
+                    ["to"].replace(".000000000Z", "")))
         return resp
 
     def __threader(self, d):
@@ -169,14 +162,10 @@ class ParallelWorker(Worker):
         function name that will interact with the api, the second is a
         dictionary with keys matching the api function arguments.
         """
-        func = iterable[0]
-        configFile = iterable[1]["configFile"]
-        instrument = iterable[1]["instrument"]
-        queryParameters = iterable[1]["queryParameters"]
-        live = iterable[1]["live"]
+        func = iterable.pop("func")
         resp = None
         try:
-            data = func(configFile, instrument, queryParameters, live)
+            data = func(**iterable)
         except exceptions.OandaError as e:
             resp = e.oanda_msg
         except exceptions.ApiError as e:
@@ -189,9 +178,9 @@ class ParallelWorker(Worker):
         finally:
             lock.acquire()
             log.info("{0}, {1}: {2}".format(os.getpid(),
-                                            queryParameters["from"]
+                                            iterable["queryParameters"]["from"]
                                             .replace(".000000000Z", ""),
-                                            queryParameters["to"]
+                                            iterable["queryParameters"]["to"]
                                             .replace(".000000000Z", "")))
             lock.release()
         return resp  # k
@@ -219,49 +208,49 @@ class ParallelWorker(Worker):
 
 if __name__ == "__main__":
     import time
+    from pprint import pprint
+    from htp.toolbox import dates
+    from htp.api import oanda, exceptions
+
     f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     logging.basicConfig(level=logging.INFO, format=f)
-    kwargs = {"configFile": "config.ini",
-              "instrument": "AUD_JPY",
-              "queryParameters": {"granularity": "D"},
-              "live": False}
+
     func = oanda.Candles
     date_gen = dates.Select().by_month(period=5, no_days=[5, 6],
                                        year_by_day=True)
     date_list = []
     for i in date_gen:
         date_list.append(i)
-    d = {}
-    configFile = "config.ini"
+
     instrument = "AUD_JPY"
     queryParameters = {"granularity": "D"}
-    live = False
+    cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
+
+    start_time = time.time()
+    d = Worker(date_gen=date_list,
+               func=func,
+               configFile=cf,
+               instrument=instrument,
+               queryParameters=queryParameters).run()
+    # pprint(d)
+    print("--- %s seconds ---" % (time.time() - start_time))
+
     start_time = time.time()
     print("ConcurrentWorker\n")
-    ConcurrentWorker(d=d,
-                     date_gen=date_list,
-                     func=func,
-                     configFile=configFile,
-                     instrument=instrument,
-                     queryParameters=queryParameters,
-                     live=live).run()
+    d = ConcurrentWorker(d=d,
+                         date_gen=date_list,
+                         func=func,
+                         configFile=cf,
+                         instrument=instrument,
+                         queryParameters=queryParameters).run()
     print("--- %s seconds ---" % (time.time() - start_time))
+
     print("\nParallelWorker\n")
     start_time = time.time()
     ParallelWorker(date_gen=date_list,
                    func=func,
-                   configFile=configFile,
+                   configFile=cf,
                    instrument=instrument,
-                   queryParameters=queryParameters,
-                   live=live).run()
+                   queryParameters=queryParameters).run()
+    pprint(d)
     print("--- %s seconds ---" % (time.time() - start_time))
-"""
-    start_time = time.time()
-    Worker(date_gen=date_list,
-           func=func,
-           configFile=configFile,
-           instrument=instrument,
-           queryParameters=queryParameters,
-           live=live).run_single()
-    print("--- %s seconds ---" % (time.time() - start_time))
-"""

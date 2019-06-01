@@ -12,6 +12,6 @@ setup(
     ],
     scripts=["bin/htp"],
     entry_points={
-        "console_scripts": ["candles=api.scripts.candles:clickData"],
+        "console_scripts": ["candles=htp.api.scripts.candles:clickData"],
     }
 )

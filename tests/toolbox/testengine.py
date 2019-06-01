@@ -16,32 +16,28 @@ class TestDownloadWorker(unittest.TestCase):
         """
         date_gen = dates.Select().by_month(period=5)
         func = oanda.Candles
-        configFile = "config.ini"
+        # configFile = "config.ini"
         instrument = "AUD_JPY"
         queryParameters = {"granularity": "D", "smooth": True}
-        live = False
+        # live = False
         work = engine.Worker(date_gen=date_gen,
                              func=func,
-                             configFile=configFile,
                              instrument=instrument,
-                             queryParameters=queryParameters,
-                             live=live)
+                             queryParameters=queryParameters)
         for i in ["date_gen", "kwargs", "func"]:
             with self.subTest(i=i):
                 if i == "date_gen":
                     # pprint(work.arg_list)
                     self.assertEqual(len(work.arg_list), 5)
                 elif i == "kwargs":
-                    self.assertEqual(len(work.kwargs), 4)
+                    self.assertEqual(len(work.kwargs), 2)
                 elif i == "func":
                     work.kwargs["queryParameters"]["from"] = \
                         "2019-05-12T15:00:00.000000000Z"
                     work.kwargs["queryParameters"]["to"] = \
                         "2019-05-15T09:00:00.000000000Z"
-                    f = work.func(work.kwargs["configFile"],
-                                  work.kwargs["instrument"],
-                                  work.kwargs["queryParameters"],
-                                  work.kwargs["live"])
+                    f = work.func(work.kwargs["instrument"],
+                                  work.kwargs["queryParameters"])
                     self.assertEqual(f.status, 200)
 
     def test_run_single(self):

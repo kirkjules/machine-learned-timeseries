@@ -3,7 +3,7 @@ import unittest
 import time
 import pytz
 from datetime import datetime, timedelta
-from toolbox import dates
+from htp.toolbox import dates
 
 logging.basicConfig(level=logging.INFO)
 
@@ -78,11 +78,11 @@ class TestSelect(unittest.TestCase):
         Test time_val for function integrity.
         """
         date = datetime(2018, 12, 31)
-        self.assertEqual(dates.Select().time_val(date=date,
-                                                 select=-1,
-                                                 hour=17,
-                                                 year_by_day=True,
-                                                 no_days=[5, 6]),
+        self.assertEqual(dates.Select.time_val(date=date,
+                                               select=-1,
+                                               hour=17,
+                                               year_by_day=True,
+                                               no_days=[5, 6]),
                          "2018-12-30 17:00:00")
 
     def test_by_calendar_year(self):

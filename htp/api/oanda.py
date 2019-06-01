@@ -10,7 +10,6 @@ class Candles(Api):
 
     def __init__(self, configFile="config.yaml", api="oanda",
                  access="practise", **kwargs):
-        # configFile, instrument, queryParameters, live):
         """Request query parameters are: price, granularity, count,
         from, to, smooth, includeFirst, dailyAlignment, alignmentTimezone,
         weeklyAlignment.
@@ -24,7 +23,7 @@ class Candles(Api):
             maximum candle count value an error will be reported by the api
             with a HTTP 400 status and logged by the Candles class.
         """
-        super().__init__(configFile, api, access, **kwargs)  # configFile, live
+        super().__init__(configFile, api, access, **kwargs)
         self.headers = {"Content-Type": "application/json",
                         "Authorization": "Bearer {0}"
                         .format(self.details["token"])}
@@ -56,7 +55,7 @@ class Candles(Api):
     def json(self):
         return self.r.json()
 
-    def df(self, outFile=None):
+    def df(self, filename=None):
 
         dic = {}
 
@@ -68,16 +67,19 @@ class Candles(Api):
 
         data = pd.DataFrame.from_dict(dic, orient="index").rename(columns=cols)
 
-        if outFile is None:
+        if filename is None:
             return data
         else:
-            return data.to_csv(outFile)
+            return data.to_csv(filename)
 
 
 if __name__ == "__main__":
 
+    import os
+    from pprint import pprint
+
     ticker = "EUR_USD"
     arguments = {"count": "6", "price": "M", "granularity": "S5"}
-    r = Candles("api/config.ini", ticker, arguments, live=False)
-    data = r.json()
-    print(data.json())
+    cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
+    data = Candles(configFile=cf, instrument=ticker, queryParameters=arguments)
+    pprint(data.json())

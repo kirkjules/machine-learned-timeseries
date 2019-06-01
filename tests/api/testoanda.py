@@ -10,30 +10,22 @@ logging.basicConfig(level=logging.INFO)
 
 class TestCandles(unittest.TestCase):
 
+    """
     def test_requests_exception(self):
-        """
-        Test request library extension raising.
-        """
-
+        # Test request library extension raising.
         ticker = "EUR_USD"
         arguments = {"count": "6", "price": "M", "granularity": "S5"}
-        # cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
-        # print(cf)
-        # live = False
 
         with self.assertRaises(exceptions.ApiError):
             oanda.Candles(instrument=ticker,
                           queryParameters=arguments)
+    """
 
     def test_response(self):
         """
         Test HTTP response type.
         """
 
-        # ticker = "EUR_USD"
-        # arguments = {"count": "6", "price": "M", "granularity": "S5"}
-        # cf = "config.ini"
-        # live = False
         ticker = "EUR_USD"
         arguments = {"count": "6", "price": "M", "granularity": "S5"}
         cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
@@ -46,22 +38,17 @@ class TestCandles(unittest.TestCase):
         """
         Test forced Oanda http responses.
         """
-        cf = "config.ini"
         arguments = {"count": "6", "price": "M", "granularity": "S5"}
         errors = {400: {"ticker": "XYZ_ABC",
-                        "arguments": arguments,
-                        "live": False},
+                        "arguments": arguments},
                   401: {"ticker": "EUR_USD",
-                        "arguments": arguments,
-                        "live": True}}
+                        "arguments": arguments}}
 
         for i in errors.keys():
             with self.subTest(i=i):
                 try:
-                    oanda.Candles(cf,
-                                  errors[i]["ticker"],
-                                  errors[i]["arguments"],
-                                  errors[i]["live"])
+                    oanda.Candles(instrument=errors[i]["ticker"],
+                                  queryParameters=errors[i]["arguments"])
                 except exceptions.OandaError as e:
                     print(e)
                     self.assertEqual(e.status_code, i)
@@ -70,12 +57,11 @@ class TestCandles(unittest.TestCase):
         """
         Test the function output defined by outFile argument.
         """
-        cf = "config.ini"
+
         ticker = "EUR_USD"
         arguments = {"count": "6", "price": "M", "granularity": "S5"}
-        live = False
 
-        r = oanda.Candles(cf, ticker, arguments, live)
+        r = oanda.Candles(instrument=ticker, queryParameters=arguments)
 
         out = {"json": dict,
                "pandas": pandas.core.frame.DataFrame,
@@ -92,8 +78,8 @@ class TestCandles(unittest.TestCase):
                     self.assertEqual(type(data), out[i])
 
                 elif i == "csv":
-                    r.df(outFile="tests/testapi/out/out.csv")
-                    out_dir = os.listdir("tests/testapi/out/")
+                    r.df(outFile="tests/api/out/out.csv")
+                    out_dir = os.listdir("tests/api/out/")
                     filename, file_ext = os.path.splitext(out_dir[0])
                     self.assertEqual(file_ext, ".csv")
 
