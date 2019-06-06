@@ -7,10 +7,10 @@ from datetime import datetime, timedelta
 log = logging.getLogger(__name__)
 
 """
-Define preset time range as class methods: 1y, 1yTD, FY, FYTD, 6m, 3m, FQ,\
-        FQTD, 5d, 1wTD, 1d, 1dTT, align to America/New_York timezone.\
-        Note: Since the exchange is located in New York, all time ranges\
-        will align with 1700h America/New-York timezone. This does not\
+Define preset time range as class methods: 1y, 1yTD, FY, FYTD, 6m, 3m, FQ,
+        FQTD, 5d, 1wTD, 1d, 1dTT, align to America/New_York timezone.
+        Note: Since the exchange is located in New York, all time ranges
+        will align with 1700h America/New-York timezone. This does not
         change with DST as the exchange operates on local business hours.
 
 Flow
@@ -18,12 +18,12 @@ Flow
 2. Convert date/time to UTC.
 Note: Parse to query in RFC3339 format, e.g. “YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ”
 3. State granularity
-Note: daily candles should keep default setting for dailyAlignment and\
-        alignmentTimezone settings. Smooth must be set to True to ensure\
+Note: daily candles should keep default setting for dailyAlignment and
+        alignmentTimezone settings. Smooth must be set to True to ensure
         same values as displayed by Oanda on the online portal.
 4. Query data.
-Note: any actions logged will be in UTC time. If the user needs a timestamp\
-        displayed in local time this functionality will be applied in the\
+Note: any actions logged will be in UTC time. If the user needs a timestamp
+        displayed in local time this functionality will be applied in the
         relevant functions and methods.
 """
 
@@ -67,9 +67,6 @@ class Conversion:
         else:
             self.conv_date = None
 
-        # datetime.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime())
-        # '2019-04-24T13:18:16+0700'
-
 
 class Select:
     """
@@ -102,6 +99,10 @@ class Select:
             self.to_date = Conversion(datetime.strftime(datetime.now(),
                                                         "%Y-%m-%d %H:%M:%S"
                                                         )).utc_date
+        self.date_range = None
+        if from_:
+            delta = self.to_date - self.from_date
+            self.date_range = int(delta.days / 365) + 2
 
     def __fmt(self, utc_start, utc_end):
         d = {}
@@ -148,6 +149,9 @@ class Select:
         Uses the time_val function to appropriately define the datetime value.
         Refer to above documentation.
         """
+        if self.date_range:
+            period = self.date_range
+        # print(period)
         dP = 0
         while dP in list(range(period)):
             start = self.time_val(datetime(self.to_date.year - dP, 1, 1),
@@ -161,6 +165,10 @@ class Select:
                                     select=-1, hour=to_hour, minute=to_minute,
                                     year_by_day=year_by_day, no_days=no_days)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
+            if self.date_range and utc_start < self.from_date:
+                utc_start = self.from_date
+                yield self.__fmt(utc_start, utc_end)
+                break
             yield self.__fmt(utc_start, utc_end)
             dP += 1
 
@@ -173,6 +181,8 @@ class Select:
         Uses the time_val function to appropriately define the datetime value.
         Refer to above documentation.
         """
+        if self.date_range:
+            period = self.date_range
         dP = 0
         s = 0
         if self.to_date.astimezone(pytz.timezone("America/New_York")) <\
@@ -194,6 +204,10 @@ class Select:
                                     select=-1, hour=to_hour, minute=to_minute,
                                     year_by_day=year_by_day, no_days=no_days)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
+            if self.date_range and utc_start < self.from_date:
+                utc_start = self.from_date
+                yield self.__fmt(utc_start, utc_end)
+                break
             yield self.__fmt(utc_start, utc_end)
             dP += 1
 
