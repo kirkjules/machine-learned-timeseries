@@ -2,7 +2,6 @@ import os
 import copy
 import logging
 import multiprocessing
-# from pprint import pprint
 from queue import Queue
 from threading import Thread, Lock
 
@@ -54,7 +53,7 @@ class Worker(Thread):
                 resp = e
                 log.info(resp)
             else:
-                resp = data.df()
+                resp = data  # .df()
             finally:
                 log.info("{0}, {1}: {2}".format(
                     os.getpid(), iterable["queryParameters"]["from"]
@@ -90,7 +89,7 @@ class ConcurrentWorker(Worker):  # Thread
             with self.__lock:
                 log.info(resp)
         else:
-            resp = data.df()
+            resp = data  # .df()
         finally:
             with self.__lock:
                 log.info("{0}, {1}: {2}".format(
@@ -174,7 +173,7 @@ class ParallelWorker(Worker):
             log.info(resp)
             lock.release()
         else:
-            resp = data.df()
+            resp = data  # .df()
         finally:
             lock.acquire()
             log.info("{0}, {1}: {2}".format(os.getpid(),
@@ -215,7 +214,7 @@ if __name__ == "__main__":
     f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     logging.basicConfig(level=logging.INFO, format=f)
 
-    func = oanda.Candles
+    func = oanda.Candles.to_df
     date_gen = dates.Select().by_month(period=5, no_days=[5, 6],
                                        year_by_day=True)
     date_list = []
