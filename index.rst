@@ -11,7 +11,6 @@ Welcome to htp's documentation!
    :caption: Contents:
 
 
-
 Indices and tables
 ==================
 
