@@ -90,7 +90,7 @@ class TestSelect(unittest.TestCase):
                                                hour=17,
                                                year_by_day=True,
                                                no_days=[5, 6]),
-                         "2018-12-30 17:00:00")
+                         "2019-01-01 17:00:00")
 
     def test_by_calendar_year(self):
         """

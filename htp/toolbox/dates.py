@@ -132,8 +132,8 @@ class Select:
         # Note the method's behviour to return dates preceeding and following
         # the given month, so as to complete a full week.
         for dt in calendar.Calendar().itermonthdates(date.year, date.month):
-            # Don't consider dates outside the stated month.
-            if dt.month != date.month:
+            # Don't consider dates earlier then the stated month.
+            if dt.month < date.month and dt.year == date.year:
                 pass
             # Don't consider days that are not business days as labelled in
             # `no_days`, e.g. Friday past 1659h till Sunday 1700h.
@@ -147,9 +147,21 @@ class Select:
             # Append the filter date to a list.
             else:
                 dt_s.append(dt)
-
-        # Select the date from the filtered list via index.
-        dt_f = dt_s[select]
+        # End date needs to be defined as the datetime value immediately before
+        # the next start value. Not just the last possible value in the month.
+        if select == -1:
+            dt_fin = []
+            for i in dt_s:
+                if i.month != date.month and i.year >= date.year:
+                    dt_fin.append(i)
+            dt_fin.sort()
+            try:
+                dt_f = dt_fin[0]
+            except IndexError:
+                dt_f = dt_s[-1] + timedelta(days=1)
+        else:
+            # Select the date from the filtered list via index.
+            dt_f = dt_s[select]
         # Annotate the chosen date with the speicifed `hour` and `minute`
         # variables.
         dt_f_ann = datetime(dt_f.year, dt_f.month, dt_f.day, hour, minute)
