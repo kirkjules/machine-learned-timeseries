@@ -101,8 +101,8 @@ class Select:
                                                         )).utc_date
         self.date_range = None
         if from_:
-            delta = self.to_date - self.from_date
-            self.date_range = int(delta.days / 365) + 2
+            delta = self.to_date.year - self.from_date.year
+            self.date_range = delta + 1
 
     def __fmt(self, utc_start, utc_end):
         d = {}
@@ -128,46 +128,77 @@ class Select:
         than daily can still be queried on Dec 31, e.g M15 -> Dec 31, 16:45:00.
         """
         dt_s = []
+        # Iterate through dates in a given year-month.
+        # Note the method's behviour to return dates preceeding and following
+        # the given month, so as to complete a full week.
         for dt in calendar.Calendar().itermonthdates(date.year, date.month):
+            # Don't consider dates outside the stated month.
             if dt.month != date.month:
                 pass
+            # Don't consider days that are not business days as labelled in
+            # `no_days`, e.g. Friday past 1659h till Sunday 1700h.
             elif dt.isoweekday() in no_days:
                 pass
+            # As noted, don't consider Dec 31 for daily granularity.
+            # Must be specified by the user via the `year_by_day` keyword
+            # argument.
             elif year_by_day is True and dt.day == 31:
                 pass
+            # Append the filter date to a list.
             else:
                 dt_s.append(dt)
 
-        dt = dt_s[select]
-        dt = datetime(dt.year, dt.month, dt.day, hour, minute)
-        return datetime.strftime(dt, "%Y-%m-%d %H:%M:%S")
+        # Select the date from the filtered list via index.
+        dt_f = dt_s[select]
+        # Annotate the chosen date with the speicifed `hour` and `minute`
+        # variables.
+        dt_f_ann = datetime(dt_f.year, dt_f.month, dt_f.day, hour, minute)
+        return datetime.strftime(dt_f_ann, "%Y-%m-%d %H:%M:%S")
 
-    def by_calendar_year(self, no_days=[], from_hour=17, from_minute=0,
+    def by_calendar_year(self, no_days=[5, 6], from_hour=17, from_minute=0,
                          to_hour=17, to_minute=0, year_by_day=True, period=1):
         """
         Function to generate yearly range datetime pairs up to current date.
         Uses the time_val function to appropriately define the datetime value.
         Refer to above documentation.
         """
+        # Check is a date range has been predefined by a set date from and to.
+        # Use pre-define setting if true.
         if self.date_range:
             period = self.date_range
         # print(period)
         dP = 0
+        # Iterate through n number of periods that have been defined to define
+        # n sets of start and end datetime values that will be use separately
+        # to query for timeseries data.
         while dP in list(range(period)):
+            # Evaluate the timestamp against defined business hours as set by
+            # keyword arguments parsed through the `time_val` class function.
             start = self.time_val(datetime(self.to_date.year - dP, 1, 1),
                                   hour=from_hour, minute=from_minute,
                                   year_by_day=year_by_day, no_days=no_days)
+            # Convert the selected start date value, currently in New York
+            # local time, to UTC time, to accurately query timeseries for the
+            # Oanda API endpoint.
             utc_start = Conversion(start, local_tz="America/New_York").utc_date
+            # Use the given to_date at the first iteration.
+            # Note the generator works itself backwards in time, generating the
+            # most recent start and end date pair first.
             if dP == 0:
                 utc_end = self.to_date
             else:
+                # Repeat the above noted logic for start date, for the end
+                # date.
                 end = self.time_val(datetime(self.to_date.year - dP, 12, 31),
                                     select=-1, hour=to_hour, minute=to_minute,
                                     year_by_day=year_by_day, no_days=no_days)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
+            # If a from date is provided, resulting in a predefined date range
+            # check that the most recently defined start date has not gone
+            # beyond the start date in history. If it has, break the iteration
+            # and the the from date as the start date for the final pairing.
             if self.date_range and utc_start < self.from_date:
-                utc_start = self.from_date
-                yield self.__fmt(utc_start, utc_end)
+                yield self.__fmt(self.from_date, utc_end)
                 break
             yield self.__fmt(utc_start, utc_end)
             dP += 1
@@ -205,15 +236,16 @@ class Select:
                                     year_by_day=year_by_day, no_days=no_days)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
             if self.date_range and utc_start < self.from_date:
-                utc_start = self.from_date
-                yield self.__fmt(utc_start, utc_end)
+                yield self.__fmt(self.from_date, utc_end)
                 break
             yield self.__fmt(utc_start, utc_end)
             dP += 1
 
     def by_quarter(self, no_days=[], from_hour=17, from_minute=0,
-                   to_hour=17, to_minute=0, year_by_day=False,
+                   to_hour=16, to_minute=0, year_by_day=False,
                    period=1):
+        if self.date_range:
+            period = self.date_range * 4
         # Set the iterator to zero.
         dP = 0
         # Start at system time converted to New York local time.
@@ -266,11 +298,14 @@ class Select:
                                     select=-1, hour=to_hour, minute=to_minute,
                                     year_by_day=year_by_day, no_days=no_days)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
+            if self.date_range and utc_start < self.from_date:
+                yield self.__fmt(self.from_date, utc_end)
+                break
             yield self.__fmt(utc_start, utc_end)
             dP += 1
 
     def by_month(self, no_days=[], from_hour=17, from_minute=0,
-                 to_hour=17, to_minute=0, year_by_day=False,
+                 to_hour=16, to_minute=45, year_by_day=False,
                  period=1):
         """
         Function to generate monthly range datetime pairs up to current date.
@@ -279,6 +314,8 @@ class Select:
         Uses the time_val function to appropriately define the datetime value.
         Refer to above documentation.
         """
+        if self.date_range:
+            period = self.date_range * 12
         dP = 0
         now = self.to_date.astimezone(pytz.timezone("America/New_York"))
         s_loc = now.month +\
@@ -310,11 +347,14 @@ class Select:
                                     select=-1, hour=to_hour, minute=to_minute,
                                     year_by_day=year_by_day, no_days=no_days)
                 utc_end = Conversion(end, local_tz="America/New_York").utc_date
+            if self.date_range and utc_start < self.from_date:
+                yield self.__fmt(self.from_date, utc_end)
+                break
             yield self.__fmt(utc_start, utc_end)
             dP += 1
 
     def by_week(self, no_days=[], from_hour=17, from_minute=0, to_hour=16,
-                to_minute=0, year_by_day=False, period=1):
+                to_minute=55, year_by_day=False, period=1):
         """
         Function to generate weekly range datetime pairs up to current date.
         Set variables within the function explicitly state start and end time
@@ -322,6 +362,8 @@ class Select:
         Don't use with daily or greater granularity as this will query a daily
         candle starting Friday 1700h which is out of range.
         """
+        if self.date_range:
+            period = self.date_range * 53
         dP = 0
         # Take utc date and convert to NY time.
         ny_time = self.to_date.astimezone(pytz.timezone("America/New_York"))
@@ -344,17 +386,22 @@ class Select:
                 end = end.replace(hour=to_hour, minute=to_minute)
                 fmt = datetime.strftime(end, "%Y-%m-%d %H:%M:%S")
                 utc_end = Conversion(fmt, local_tz="America/New_York").utc_date
+            if self.date_range and utc_start < self.from_date:
+                yield self.__fmt(self.from_date, utc_end)
+                break
             yield self.__fmt(utc_start, utc_end)
             dP += 1
 
     def by_day(self, no_days=[], from_hour=17, from_minute=0, to_hour=16,
-               to_minute=0, year_by_day=False, period=1):
+               to_minute=55, year_by_day=False, period=1):
         """
         Function to generate daily range datetime pairs up to current date.
         Set variables within the function explicitly state start and end time
         range align with 1700h to 1659h+1day respectively, New York time.
         Don't use with daily or greater granularity.
         """
+        if self.date_range:
+            period = self.date_range * 366
         dP = 0
         s = 0
         # Take UTC date and convert to NY time.
@@ -388,6 +435,9 @@ class Select:
             if utc_start.isoweekday() in [5, 6]:
                 s += 1
             else:
+                if self.date_range and utc_start < self.from_date:
+                    yield self.__fmt(self.from_date, utc_end)
+                    break
                 yield self.__fmt(utc_start, utc_end)
             dP += 1
 
