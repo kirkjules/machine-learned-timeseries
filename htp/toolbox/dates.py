@@ -167,7 +167,7 @@ class Select:
         dt_f_ann = datetime(dt_f.year, dt_f.month, dt_f.day, hour, minute)
         return datetime.strftime(dt_f_ann, "%Y-%m-%d %H:%M:%S")
 
-    def by_calendar_year(self, no_days=[5, 6], from_hour=17, from_minute=0,
+    def by_calendar_year(self, no_days=[6], from_hour=17, from_minute=0,
                          to_hour=17, to_minute=0, year_by_day=True, period=1):
         """
         Function to generate yearly range datetime pairs up to current date.
@@ -215,7 +215,7 @@ class Select:
             yield self.__fmt(utc_start, utc_end)
             dP += 1
 
-    def by_financial_year(self, no_days=[], from_hour=17, from_minute=0,
+    def by_financial_year(self, no_days=[6], from_hour=17, from_minute=0,
                           to_hour=17, to_minute=0, year_by_day=False,
                           period=1):
         """
@@ -253,7 +253,7 @@ class Select:
             yield self.__fmt(utc_start, utc_end)
             dP += 1
 
-    def by_quarter(self, no_days=[], from_hour=17, from_minute=0,
+    def by_quarter(self, no_days=[6], from_hour=17, from_minute=0,
                    to_hour=17, to_minute=0, year_by_day=False,
                    period=1):
         if self.date_range:
@@ -316,7 +316,7 @@ class Select:
             yield self.__fmt(utc_start, utc_end)
             dP += 1
 
-    def by_month(self, no_days=[], from_hour=17, from_minute=0,
+    def by_month(self, no_days=[6], from_hour=17, from_minute=0,
                  to_hour=17, to_minute=0, year_by_day=False,
                  period=1):
         """
@@ -365,8 +365,8 @@ class Select:
             yield self.__fmt(utc_start, utc_end)
             dP += 1
 
-    def by_week(self, no_days=[], from_hour=17, from_minute=0, to_hour=16,
-                to_minute=55, year_by_day=False, period=1):
+    def by_week(self, no_days=[6], from_hour=17, from_minute=0, to_hour=17,
+                to_minute=0, year_by_day=False, period=1):
         """
         Function to generate weekly range datetime pairs up to current date.
         Set variables within the function explicitly state start and end time
@@ -394,7 +394,7 @@ class Select:
             if dP == 0:
                 utc_end = self.to_date
             else:
-                end = start + timedelta(days=5)
+                end = start + timedelta(days=7)
                 end = end.replace(hour=to_hour, minute=to_minute)
                 fmt = datetime.strftime(end, "%Y-%m-%d %H:%M:%S")
                 utc_end = Conversion(fmt, local_tz="America/New_York").utc_date
@@ -404,8 +404,8 @@ class Select:
             yield self.__fmt(utc_start, utc_end)
             dP += 1
 
-    def by_day(self, no_days=[], from_hour=17, from_minute=0, to_hour=16,
-               to_minute=55, year_by_day=False, period=1):
+    def by_day(self, no_days=[6], from_hour=17, from_minute=0, to_hour=17,
+               to_minute=0, year_by_day=False, period=1):
         """
         Function to generate daily range datetime pairs up to current date.
         Set variables within the function explicitly state start and end time
@@ -444,13 +444,16 @@ class Select:
                 utc_end = Conversion(fmt, local_tz="America/New_York").utc_date
             # Pass if start datetime value is a Friday or Saturday, as this is
             # outside business hours for all tickers.
-            if utc_start.isoweekday() in [5, 6]:
-                s += 1
-            else:
-                if self.date_range and utc_start < self.from_date:
-                    yield self.__fmt(self.from_date, utc_end)
-                    break
-                yield self.__fmt(utc_start, utc_end)
+            # if utc_start.isoweekday() in no_days:
+            #    s += 1
+            # else:
+            if self.date_range and utc_start < self.from_date:
+                yield self.__fmt(self.from_date, utc_end)
+                # print("BREAKING")
+                break
+            yield self.__fmt(utc_start, utc_end)
+            # if dP == (period + s - 1):
+            #     print("FINISHED")
             dP += 1
 
     def calendar_year_to_date():
