@@ -1,4 +1,5 @@
 import logging
+import pandas as pd
 from pprint import pprint
 from htp.api import oanda
 from htp.toolbox import dates, engine
@@ -15,23 +16,25 @@ logger.addHandler(fh)
 
 def main():
 
-    configFile = "./config.ini"
     instrument = "AUD_JPY"
-    queryParameters = {"granularity": "D"}
-    live = False
-    func = oanda.Candles
+    queryParameters = {"granularity": "M15"}
+    func = oanda.Candles.to_df
+    queue_month = dates.Select(from_="2005-01-01 17:00:00",
+                               to="2015-12-30 17:00:00",
+                               local_tz="America/New_York"
+                               ).by_month()
     date_list = []
-    for i in dates.Select().by_month(period=5):
+    for i in queue_month:
         date_list.append(i)
-
-    data = engine.ParallelWorker(date_gen=date_list,
+    work = engine.ParallelWorker(date_gen=date_list,
                                  func=func,
-                                 configFile=configFile,
                                  instrument=instrument,
-                                 queryParameters=queryParameters,
-                                 live=live).run()
+                                 queryParameters=queryParameters)
+    month = work.run()
+    month_concat = pd.concat(month)
+    month_clean = month_concat[~month_concat.index.duplicated()]
 
-    pprint(data)
+    pprint(month_clean)
 
 
 if __name__ == "__main__":
