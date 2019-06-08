@@ -254,7 +254,7 @@ class Select:
             dP += 1
 
     def by_quarter(self, no_days=[], from_hour=17, from_minute=0,
-                   to_hour=16, to_minute=0, year_by_day=False,
+                   to_hour=17, to_minute=0, year_by_day=False,
                    period=1):
         if self.date_range:
             period = self.date_range * 4
@@ -317,7 +317,7 @@ class Select:
             dP += 1
 
     def by_month(self, no_days=[], from_hour=17, from_minute=0,
-                 to_hour=16, to_minute=45, year_by_day=False,
+                 to_hour=17, to_minute=0, year_by_day=False,
                  period=1):
         """
         Function to generate monthly range datetime pairs up to current date.

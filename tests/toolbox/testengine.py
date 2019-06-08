@@ -1,7 +1,7 @@
 import unittest
 import logging
 import pandas as pd
-# from pprint import pprint
+from pprint import pprint
 from htp.api import oanda
 from htp.toolbox import dates, engine
 
@@ -135,7 +135,34 @@ class TestDownloadWorker(unittest.TestCase):
 
     def test_index_check(self):
         """
-        Test download returns values for all business days.
+        Test returned datetime values' consistency by cross checking between
+        two data sets:
+            1. The key dataset is a bulk 2005-2015 download at the daily
+            granularity.
+            2. The tested dataset is generated for the same date range but with
+            a smaller increment dates generator as well as a smaller
+            granularity.
+
+        Note, the results reflect that larger granularities will average/group
+        ohlc values for a time range that may lack continuous data points.
+        E.g. The daily 2013-02-01 22:00:00 is generated from data points at
+        2013-02-01 22:15:00.
+        A check can be performed to confirm this by querying the specifc
+        datetime value signalled by the key dataset at the testing granularity.
+        If the return is approximated to another datetime than this confirms
+        the hypothesis.
+        E.g.
+        >>> ticker = "AUD_JPY"
+        >>> arguments = {"count": 1, "from": "2013-02-02T22:00:00.000000000Z",
+                         "granularity": "M15"}
+        >>> data = oanda.Candles(instrument=ticker, queryParameters=arguments)
+        >>> data.r.json()
+        {'instrument': 'AUD_JPY',
+         'granularity': 'M15',
+         'candles': [{'complete': True,
+         'volume': 323,
+         'time': '2013-02-03T20:00:00.000000000Z',
+         'mid': {'o': '96.550', 'h': '96.709', 'l': '96.540', 'c': '96.696'}}]}
         """
         print("\nRun Index Check\n")
         queue = dates.Select(from_="2005-01-01 17:00:00",
@@ -162,8 +189,93 @@ class TestDownloadWorker(unittest.TestCase):
         check_joined = check_indexset.join(d_, how="left", rsuffix="_d",
                                            lsuffix="_check")
         nval = check_joined[check_joined["open_d"].isnull()]
-        print(nval)
-        self.assertEqual(len(nval), 0)
+        print(len(nval))
+        for i in nval.index:
+            with self.subTest(i=i):
+                candle = \
+                        oanda.Candles.to_json(instrument=instrument,
+                                              queryParameters={"count": 1,
+                                                               "from": i,
+                                                               "granularity":
+                                                               queryParameters
+                                                               ["granularity"]
+                                                               })
+                pprint({i: candle})
+                self.assertNotEqual(candle["candles"][0]["time"], i)
+        # print(nval)
+        # self.assertEqual(len(nval), 0)
+
+    def test_index_check_same_granularity(self):
+        """
+        Test returned datetime values' consistency by cross checking between
+        two data sets:
+            1. The key dataset is queried from a larger increment dates
+            generator at a given granularity.
+            2. The tested dataset is generated for the same date range but with
+            a smaller increment dates generator at the same granularity.
+
+        There should be perfect matching if the smaller increment dates
+        generator doesn't skip any datetime values contained in the key
+        dataset. This is because both datasets have the same granularity, so
+        datetime values should automatically increment equivalently.
+
+        Learnt that the Oanda API will not return the candle for the `to`
+        timestamp.
+        """
+        print("\nRun Index Check\n")
+        func = oanda.Candles.to_df
+        configFile = "config.yaml"
+        instrument = "AUD_JPY"
+        queryParameters = {"granularity": "H1", "smooth": True}
+        queue_large = dates.Select(from_="2005-01-01 17:00:00",
+                                   to="2015-12-30 17:00:00",
+                                   local_tz="America/New_York"
+                                   ).by_quarter(no_days=[6],
+                                                to_minute=0)
+        work = engine.ConcurrentWorker(date_gen=queue_large,
+                                       func=func,
+                                       configFile=configFile,
+                                       instrument=instrument,
+                                       queryParameters=queryParameters)
+        check = work.run()
+        check_indexset = pd.concat(check)  # pprint(d)
+        queue_small = dates.Select(from_="2005-01-01 17:00:00",
+                                   to="2015-12-30 17:00:00",
+                                   local_tz="America/New_York"
+                                   ).by_month(no_days=[6],
+                                              to_minute=0)
+        work = engine.ConcurrentWorker(date_gen=queue_small,
+                                       func=func,
+                                       configFile=configFile,
+                                       instrument=instrument,
+                                       queryParameters=queryParameters)
+        d = work.run()
+        d_ = pd.concat(d)  # pprint(d)
+        # check = pd.read_csv("data/AUD_JPYD2005-2015.csv")
+        # check_indexset = check.set_index("Unnamed: 0")
+        # d_joined = d_.join(check_indexset, how="inner", lsuffix="_d",
+        #                    rsuffix="_check")
+        check_joined = check_indexset.join(d_, how="left", rsuffix="_d",
+                                           lsuffix="_check")
+        nval = check_joined[check_joined["open_d"].isnull()]
+        print(len(nval))
+        if len(nval) > 0:
+            for i in nval.index:
+                with self.subTest(i=i):
+                    candle = \
+                            oanda.Candles.to_json(
+                                instrument=instrument,
+                                queryParameters={"count": 1,
+                                                 "from": i,
+                                                 "granularity":
+                                                 queryParameters
+                                                 ["granularity"]})
+                    pprint({i: candle})
+                    self.assertNotEqual(candle["candles"][0]["time"], i)
+        else:
+            self.assertEqual(len(nval), 0)
+        # print(nval)
+        # self.assertEqual(len(nval), 0)
 
 
 if __name__ == "__main__":
