@@ -20,7 +20,7 @@ def main():
     queryParameters = {"granularity": "M15"}
     func = oanda.Candles.to_df
     queue_month = dates.Select(from_="2005-01-01 17:00:00",
-                               to="2015-12-30 17:00:00",
+                               to="2005-12-30 17:00:00",
                                local_tz="America/New_York"
                                ).by_month()
     date_list = []
@@ -33,8 +33,11 @@ def main():
     month = work.run()
     month_concat = pd.concat(month)
     month_clean = month_concat[~month_concat.index.duplicated()]
-
-    pprint(month_clean)
+    month_index_dt = month_clean.set_index(
+        pd.to_datetime(month_clean.index,
+                       format="%Y-%m-%dT%H:%M:%S.%f000Z"), drop=True)
+    month_index_sorted = month_index_dt.sort_index()
+    pprint(month_index_sorted)
 
 
 if __name__ == "__main__":
