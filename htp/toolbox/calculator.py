@@ -1,22 +1,52 @@
-"""Position Sizing"""
+"""Module for calculating position sizes."""
 
 import decimal
 import functools
 
 
 def standardise_decimal(func):
+    """
+    A decorator to convert all keyword arguments to Decimal objects in the
+    wrapped function.
 
+    The wrapped function is one of four position size calculators, chosen
+    depending on the context of the target ticker, and account currency
+    denomination.
+
+    Parameters
+    ----------
+    func
+        The position size calculator whose inputs will be standardised as
+        Decimal objects.
+
+    Returns
+    -------
+    decimal.Decimal
+        A position size in arbitary units defined as a Decimal object.
+    """
     @functools.wraps(func)
     def wrapper(**kwargs):
+        """
+        The internal wrapper that actions input conversion to Decimal objects.
 
+        Parameters
+        ----------
+        kwargs
+            Keyword arguments defined within the wrapped function.
+
+        Returns
+        -------
+        decimal.Decimal
+            A position size in arbitary units defined as a Decimal object.
+        """
         decimal_kwargs = {}
         for kwarg in kwargs:
             decimal_kwargs[kwarg] = decimal.Decimal(kwargs[kwarg])
 
-        return func(**decimal_kwargs).quantize(
-            decimal.Decimal("1."), rounding=decimal.ROUND_DOWN)
+        return func(**decimal_kwargs)
 
     return wrapper
+
 # For currency pairs displayed to 4 decimal places, one pip = 0.0001
 # Yen-based currency pairs are an exception, and are displayed to only two
 # decimal places (0.01)
@@ -24,176 +54,251 @@ def standardise_decimal(func):
 # KNOWN_RATIO_YEN = (1, 0.01)
 
 
-"""
-If account denomination is the same as the counter currency (denominator)
-"""
-
-
 @standardise_decimal
-def counter_pos_size(ACCOUNT_CURR=1000, STOP=100, KNOWN_RATIO=0.0001,
+def counter_pos_size(ACC_AMOUNT=1000, STOP=100, KNOWN_RATIO=0.0001,
                      RISK_PERC=0.01):
+    """
+    A position size calculator to use when the account currency denomination is
+    the same as the counter currency (denominator) of the traded ticker.
 
-    MAX_RISK_COUNTER_CURR = ACCOUNT_CURR * RISK_PERC
+    Parameters
+    ----------
+    ACCOUNT_CURR : float
+        The sum value of the account from which funds will be used to place the
+        trade.
+    STOP : float
+        The number of pips between the entry price and the stop loss exit
+        price.
+    KNOWN_RATIO : float
+        The known unit to pip ratio for the traded ticker.
+    RISK_PERC : float
+        The percentage of the account in decimal format that will be risked on
+        this trade.
 
-    VALUE_PER_PIP = MAX_RISK_COUNTER_CURR / STOP
+    Returns
+    ------
+    float
+        The trade position size in arbitary units.
+
+    Examples
+    --------
+    >>> from htp.toolbox import calculator
+    >>> pos_size = calculator.counter_pos_size(ACC_AMOUNT=1000, STOP=100,
+                                               KNOWN_RATIO=0.0001,
+                                               RISK_PERC=0.01)
+    >>> print(pos_size)
+    """
+    MAX_RISK_ACC_CURR = ACC_AMOUNT * RISK_PERC
+
+    VALUE_PER_PIP = MAX_RISK_ACC_CURR / STOP
 
     POSITION_SIZE = VALUE_PER_PIP * (1 / KNOWN_RATIO)
 
-    return POSITION_SIZE
-
-# ACCOUNT_USD = 5000
-# Where the STOP is in pips.
-# TRADE = {"ticker": "EUR_USD", "STOP": 200}
-
-# Where 1% of the account is the maximum amount risked per trade.
-# Multiply the account balance and maximum percentage amount to be risked to
-# give the dollar amount risked, e.g.
-# USD 5000 * 1% = USD 50
-# MAX_RISK_USD = ACCOUNT_USD * 0.01
-
-# Divide the amount risked by the trade stop amount in pips, e.g.
-# (USD 50) / (200 pips) = USD 0.25 / pip
-# VALUE_PER_PIP = MAX_RISK_USD / TRADE["STOP"]
-
-# Multiply the value per pip by a known unit/pip value ratio of EUR/USD, e.g.
-# 10K units equates to 1 pip per 1 USD to give,
-# USD 0.25 per pip * [(10K units of EUR/USD) / (USD 1 per pip)] = 2500 units
-# of EUR/USD.
-# POSITION_SIZE = VALUE_PER_PIP * (10000 / 1)
-
-
-"""
-If the account denomination is the same as the base currency (nominator).
-"""
+    return POSITION_SIZE.quantize(
+            decimal.Decimal("1."), rounding=decimal.ROUND_UP)
 
 
 @standardise_decimal
-def base_pos_size(ACCOUNT_CURR=1000, TARGET_ASK=1.0000, STOP=100,
+def base_pos_size(ACC_AMOUNT=1000, TARGET_ASK=1.0000, STOP=100,
                   KNOWN_RATIO=0.0001, RISK_PERC=0.01):
+    """
+    A position size calculator to use when the account currency denomination is
+    the same as the base currency (nominator) of the traded ticker.
 
-    MAX_RISK_ACC_CURR = ACCOUNT_CURR * RISK_PERC
+    Parameters
+    ----------
+    ACC_AMOUNT : float
+        The sum value of the account from which funds will be used to place the
+        trade.
+    TARGET_ASK : float
+        The asking price for the traded ticker at present.
+    STOP : float
+        The number of pips between the entry price and the stop loss exit
+        price.
+    KNOWN_RATIO : float
+        The known unit to pip ratio for the traded ticker.
+    RISK_PERC : float
+        The percentage of the account in decimal format that will be risked on
+        this trade.
 
-    MAX_RISK_COUNTER_CURR = TARGET_ASK * MAX_RISK_ACC_CURR
+    Returns
+    ------
+    float
+        The trade position size in arbitary units.
 
-    VALUE_PER_PIP = MAX_RISK_COUNTER_CURR / STOP
+    Examples
+    --------
+    >>> from htp.toolbox import calculator
+    >>> pos_size = calculator.base_pos_size(ACC_AMOUNT=1000,
+                                            TARGET_ASK=1.0000, STOP=100,
+                                            KNOWN_RATIO=0.0001, RISK_PERC=0.01)
+    >>> print(pos_size)
+    """
+
+    MAX_RISK_ACC_CURR = ACC_AMOUNT * RISK_PERC
+
+    MAX_RISK_CNT_CURR = MAX_RISK_ACC_CURR * TARGET_ASK
+
+    VALUE_PER_PIP = MAX_RISK_CNT_CURR / STOP
 
     POSITION_SIZE = VALUE_PER_PIP * (1 / KNOWN_RATIO)
 
-    return POSITION_SIZE
-
-# ACCOUNT_EUR = 5000
-# TRADE = {"ticker": "EUR_USD", "STOP": 200}
-
-# Where 1% of the account is the maximum amount risked per trade, e.g.
-# EUR 5000 * 1% = EUR 50
-# MAX_RISK_EUR = ACCOUNT_EUR * 0.01
-
-# Convert to USD because the currency pair's value is calculated by the counter
-# currency. To do this:
-    # 1. Find the current exchange rate for EUR/USD:
-    # 1 EUR is $1.5000 (EUR/USD = 1.5000)
-    # 2. To find the value in USD, multiply the current exchange rate for
-    # EUR/USD by the amount of euros being risked:
-    # (EUR/USD 1.5000) * EUR 50 = approx USD 75.00
-# MAX_RISK_USD = BID * MAX_RISK_EUR
-
-# Divide risk in USD by stop loss in pips, e.g.
-# (USD 75.00) / (200 pips) = USD 0.375 / pip
-# VALUE_PER_PIP = MAX_RISK_USD / TRADE["STOP"]
-
-# Multiply the value per pip move by the known unit-to-pip value ratio, e.g.
-# (USD 0.375 per pip) * [(10K units of EUR/USD) / (USD 1 per pip)] = 3750 units
-# of EUR/USD
-# POSITION_SIZE = VALUE_PER_PIP * (10000 / 1)
-
-
-"""
-If the account denomination is not in the currency pair trade, but the same
-as the conversion pair's counter currency.
-"""
+    return POSITION_SIZE.quantize(
+            decimal.Decimal("1."), rounding=decimal.ROUND_UP)
 
 
 @standardise_decimal
-def counter_conv_pos_size(ACCOUNT_CURR=1000.00, TARGET_CNT_ACC_CURR_ASK=1.0000,
-                          STOP=100, KNOWN_RATIO=0.0001, RISK_PERC=0.01):
+def counter_conv_pos_size(ACC_AMOUNT=1000.00, CONV_ASK=1.0000, STOP=100,
+                          KNOWN_RATIO=0.0001, RISK_PERC=0.01):
+    """
+    A position size calculator to use when the account currency denomination is
+    the same as the counter currency (denominator) of the conversion pair.
 
-    MAX_RISK_ACC_CURR = ACCOUNT_CURR * RISK_PERC
+    The conversion pair is used to convert the risk calculated in the account
+    currency, across to the target pair's counter currency.
 
-    MAX_RISK_TARGET_CNT = (1 / TARGET_CNT_ACC_CURR_ASK) * MAX_RISK_ACC_CURR
+    Parameters
+    ----------
+    ACC_AMOUNT : float
+        The sum value of the account from which funds will be used to place the
+        trade.
+    CONV_ASK : float
+        The asking price for the conversion ticker at present.
+    STOP : float
+        The number of pips between the entry price and the stop loss exit
+        price.
+    KNOWN_RATIO : float
+        The known unit to pip ratio for the traded ticker.
+    RISK_PERC : float
+        The percentage of the account in decimal format that will be risked on
+        this trade.
+
+    Returns
+    ------
+    float
+        The trade position size in arbitary units.
+
+    Examples
+    --------
+    >>> from htp.toolbox import calculator
+    >>> pos_size = calculator.counter_conv_pos_size(
+                     ACC_AMOUNT=1000, CONV_ASK=1.0000,
+                     STOP=100, KNOWN_RATIO=0.0001, RISK_PERC=0.01)
+    >>> print(pos_size)
+    """
+
+    MAX_RISK_ACC_CURR = ACC_AMOUNT * RISK_PERC
+
+    MAX_RISK_TARGET_CNT = MAX_RISK_ACC_CURR * (1 / CONV_ASK)
 
     VALUE_PER_PIP = MAX_RISK_TARGET_CNT / STOP
 
-    POSITION_SIZE = VALUE_PER_PIP * KNOWN_RATIO
+    POSITION_SIZE = VALUE_PER_PIP * (1 / KNOWN_RATIO)
 
-    return POSITION_SIZE
-
-# Remember, the value of a currency pair is in the counter currency.
-
-# ACCOUNT_USD = 5000
-# TRADE = {"ticker": "EUR_GBP", "STOP": 200}
-
-# Where 1% of the account is the maximum amount risked per trade, e.g.
-# USD 5000 * 1% = USD 50
-# MAX_RISK_USD = ACCOUNT_USD * 0.01
-
-# Convert the USD risk to GBP risk via:
-    # 1. Find the current exchange rate for GBP/USD:
-    # 1 GBP is $1.7500 (GBP/USD = 1.7500)
-    # 2. To find the value in USD, multiply the inverse of the current exchange
-    # rate for GBP/USD by the amount of USD being risked:
-    # (1 / (GBP/USD 1.7500)) * USD 50 = GBP 28.57
-# MAX_RISK_GBP = (1 / BID) * MAX_RISK_USD
-
-# Convert GBP risk amount to pips by dividing the stop loss by pips, e.g.
-# (GBP 28.57) / (200 pips) = GBP 0.14 / pip
-# VALUE_PER_PIP = MAX_RISK_GBP / TRADE["STOP"]
-
-# Multiply the value-per-pip by the known unit-to-pip value ratio, e.g.
-# (GBP 0.14 per pip) * [(10K units of EUR/GBP) / (GBP 1 per pip)] = approx 1429
-# EUR/GBP
-# POSITION_SIZE = VALUE_PER_PIP * (10000 / 1)
-
-
-"""
-If the account denomination is not in the currency pair traded, but the same as
-the conversion pair's base currency.
-"""
+    return POSITION_SIZE.quantize(
+            decimal.Decimal("1."), rounding=decimal.ROUND_UP)
 
 
 @standardise_decimal
-def base_conv_pos_size(ACCOUNT_CURR=1000, TARGET_CNT_ACC_CURR_ASK=1.0000,
-                       STOP=100, KNOWN_RATIO=0.0001, RISK_PERC=0.01):
+def base_conv_pos_size(ACC_AMOUNT=1000, CONV_ASK=1.0000, STOP=100,
+                       KNOWN_RATIO=0.0001, RISK_PERC=0.01):
+    """
+    A position size calculator to use when the account currency denomination is
+    the same as the base currency (nominator) of the conversion pair.
 
-    MAX_RISK_ACC_CURR = ACCOUNT_CURR * RISK_PERC
+    The conversion pair is used to convert the risk calculated in the account
+    currency, across to the target pair's counter currency.
 
-    MAX_RISK_TARGET_CNT = TARGET_CNT_ACC_CURR_ASK * MAX_RISK_ACC_CURR
+    Parameters
+    ----------
+    ACC_AMOUNT : float
+        The sum value of the account from which funds will be used to place the
+        trade.
+    CONV_ASK : float
+        The asking price for the conversion ticker at present.
+    STOP : float
+        The number of pips between the entry price and the stop loss exit
+        price.
+    KNOWN_RATIO : float
+        The known unit to pip ratio for the traded ticker.
+    RISK_PERC : float
+        The percentage of the account in decimal format that will be risked on
+        this trade.
+
+    Returns
+    ------
+    float
+        The trade position size in arbitary units.
+
+    Examples
+    --------
+    >>> from htp.toolbox import calculator
+    >>> pos_size = calculator.base_conv_pos_size(
+                     ACC_AMOUNT=1000, CON_ASK=1.000,
+                     STOP=100, KNOWN_RATIO=0.0001, RISK_PERC=0.01)
+    >>> print(pos_size)
+    """
+
+    MAX_RISK_ACC_CURR = ACC_AMOUNT * RISK_PERC
+
+    MAX_RISK_TARGET_CNT = MAX_RISK_ACC_CURR * CONV_ASK
 
     VALUE_PER_PIP = MAX_RISK_TARGET_CNT / STOP
 
-    POSITION_SIZE = VALUE_PER_PIP * KNOWN_RATIO
+    POSITION_SIZE = VALUE_PER_PIP * (1 / KNOWN_RATIO)
 
-    return POSITION_SIZE
+    return POSITION_SIZE.quantize(
+            decimal.Decimal("1."), rounding=decimal.ROUND_UP)
 
 
-# ACCOUNT_CHF = 5000
-# TRADE = {"ticker": "USD_JPY", "STOP": 100}
+@standardise_decimal
+def profit_loss(ENTRY=1.0, EXIT=1.1, POS_SIZE=2500, CONV_ASK=1.0, CNT=1):
+    """
+    Profit and loss calculator for buy trades.
 
-# Where  1% of the account is the maximum amount risked per trade, e.g.
-# CHF 5000 * 1% = CHF 50
-# MAX_RISK_CHF = ACCOUNT_CHF * 0.01
+    Parameters
+    ----------
+    ENTRY : float
+        The trade's entry price.
+    EXIT : float
+        The trade's exit price.
+    POS_SIZE : int
+        The trade's position size in units.
+    CONV_ASK : float
+        The asking price at time of exit for the conversion pair. The
+        conversion pair is defined by the account denomination against the
+        traded pair counter currency.
+    CNT :  int
+        Either 0 or 1, to denote whether the account denomination is either
+        the base (0) or the counter (1) currency in the conversion pair.
 
-# Convert the value of the account currency (CHF) to the ticker's counter
-# currency (denominator).
-# Since the account is in the same denomination as the conversion pair's base
-# currency (CHF/JPY), simply multiply the amount risked by the exchange rat e.g
-# CHF 50 * (JPY 85.00/CHF 1) = JPY 4250
-# MAX_RISK_JPY = BID * MAX_RISK_CHF
+    Returns
+    -------
+    float
+        The trade's value in the account denomination currency.
 
-# Divide the max risk by the stop loss in pips, e.g.
-# (JPY 4250) / (100 pips) = JPY 42.50 / pip
-# VALUE_PER_PIP = MAX_RISK_JPY / TRADE["STOP"]
+    Examples
+    --------
+    >>> from htp.toolbox import calculator
+    >>> profit_loss_amount = calculator.profit_loss(ENTRY=2.1443,
+                                                    EXIT=2.1452,
+                                                    POS_SIZE=1000,
+                                                    CONV_ASK=1.1025,
+                                                    CNT=1)
+    >>> print(profit_loss_amount)
+    0.99225
+    """
+    PIP_DELTA = EXIT - ENTRY
 
-# Multiply by a known unit-to-pip value ratio, e.g.
-# (JPY 42.50 per pip) * [(100 units of USD/JPY) / (JPY 1 per pip)] = approx
-# 4250 USD/JPY
-# POSITION_SIZE = VALUE_PER_PIP * (100 / 1)
+    # Invert the conversion rate if the account denomination is not the counter
+    # currency, i.e. the base currency, in the conversion pair, composed of the
+    # traded counter currency against the account currency.
+    if not int(CNT):
+        CONV_ASK = (1 / CONV_ASK)
+
+    CURR_DELTA = PIP_DELTA * CONV_ASK
+
+    ACC_AMOUNT = CURR_DELTA * POS_SIZE
+
+    return ACC_AMOUNT.quantize(
+            decimal.Decimal("0.00001"), rounding=decimal.ROUND_HALF_EVEN)

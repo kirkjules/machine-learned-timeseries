@@ -36,8 +36,8 @@ def main():
     month_index_dt = month_clean.set_index(
         pd.to_datetime(month_clean.index,
                        format="%Y-%m-%dT%H:%M:%S.%f000Z"), drop=True)
-    month_index_sorted = month_index_dt.sort_index()
-    pprint(month_index_sorted)
+    month_sorted = month_index_dt.sort_index()
+    pprint(month_sorted)
 
 
 if __name__ == "__main__":
@@ -54,16 +54,32 @@ if __name__ == "__main__":
 # "NATGAS_USD", "XAG_AUD", "SOYBN_USD", "SUGAR_USD", "SPX500_USD",
 # "NAS100_USD", "WTICO_USD", "WHEAT_USD"]:
 
-# Read in the ticker data
-# :ticker
-# :date range
-#    :generate with dates module
-# :granularity
-# :call data via either single, threading or multiprocessing functions.
-#    :functions wrap the oanda.Candles api function.
+# Preparation:
+# ------------
+# 1. Set the data paramaters.
+#     a) ticker
+#     b) date range: generate with dates module
+#     c) granularity
 
-# Apply indicator(s) to timeseries
-# :indicator(s)
+# 2. Call the data via either single, threading or multiprocessing functions.
+#     - The processing functions wrap the oanda.Candles api function.
+
+# 3. Clean and process the data for analysis.
+
+# Analysis - phase one:
+# ---------------------
+# 1. Compute indicator(s) on timeseries
+
+# 2. Generate entry and exit signals from indicator(s) with standard rules.
+
+# 3. Query entry and exit prices for signals.
+
+# 4. Calculate position size and profit/loss for trades.
+
+# 5. Generate trade system report from analysis table.
+#     - Columns: Entry Timestamp, Entry Price, Exit Timestamp, Exit Price,
+#       Position Size, Profit/Loss Pips, Profit/Loss AUD, Realized Profit/Loss
+#       AUD
 
 # Apply model to dataset
 # :stop loss

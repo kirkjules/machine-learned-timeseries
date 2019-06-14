@@ -19,26 +19,27 @@ def entry_exit_combine(row, df, entry, exit):
 
 def buy_signal_cross(df, fast, slow):
 
-    df = df.assign(comp=df[fast] > df[slow]).rename(
-        {"comp": "{} > {}".format(fast, slow)}, axis="columns")
+    system = "{} > {}".format(fast, slow)
 
-    df["Prev: {} > {}".format(fast, slow)] = df["{} > {}".format(fast, slow)
-                                                ].shift(2)
+    prev = "Prev: {}".format(system)
 
-    df["Curr: {} > {}".format(fast, slow)] = df["{} > {}".format(fast, slow)
-                                                ].shift(1)
+    curr = "Curr: {}".format(system)
 
-    entry = "{} {} buy entry".format(fast, slow)
+    df = df.assign(comp=df[fast] > df[slow]).rename({"comp": system},
+                                                    axis="columns")
 
-    df[entry] = df.apply(
-        lambda x: x["Prev: {} > {}".format(fast, slow)] is False and
-        x["Curr: {} > {}".format(fast, slow)] is True, axis=1)
+    df[prev] = df[system].shift(2)
 
-    exit = "{} {} buy exit".format(fast, slow)
+    df[curr] = df[system].shift(1)
 
-    df[exit] = df.apply(
-        lambda x: x["Prev: {} > {}".format(fast, slow)] is True and
-        x["Curr: {} > {}".format(fast, slow)] is False, axis=1)
+    entry = "{} buy entry".format(system)
+
+    df[entry] = df.apply(lambda x: x[prev] is False and x[curr] is True,
+                         axis=1)
+
+    exit = "{} buy exit".format(system)
+
+    df[exit] = df.apply(lambda x: x[prev] is True and x[curr] is False, axis=1)
 
     ref = df.copy()
 
