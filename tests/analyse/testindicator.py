@@ -1,6 +1,6 @@
 import os
-import statistics
 import unittest
+import statistics
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -52,11 +52,13 @@ class TestIndicator(unittest.TestCase):
         datapoints = ([np.sin(t * samples * 2 * np.pi) for t in time])
         dates = pd.date_range("20130101", periods=samples)
         dataset = pd.DataFrame({"close": datapoints}, index=dates)
+
         # Returns a new dataframe with only one column.
         dataset_sma_fast = indicator.smooth_moving_average(dataset, period=5)
         # Returns a new dataframe with two columns.
         dataset_sma_fast_slow = indicator.smooth_moving_average(
             dataset, df2=dataset_sma_fast, period=10, concat=True)
+        
         dataset_sma_fast_slow.plot()
         fig = plt.gcf()
         fig.savefig("tests/analyse/output.png")
