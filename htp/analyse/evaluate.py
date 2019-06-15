@@ -6,7 +6,6 @@ def entry_exit_combine(row, df, entry, exit):
 
     trade = False
     if row[entry] == True:
-        print(row.name)
         reduct = df.loc[row.name:]
         exit = reduct[reduct[exit] == True].iterrows()
         try:
@@ -20,16 +19,11 @@ def entry_exit_combine(row, df, entry, exit):
 def buy_signal_cross(df, fast, slow):
 
     system = "{} > {}".format(fast, slow)
-
     prev = "Prev: {}".format(system)
-
     curr = "Curr: {}".format(system)
 
-    df = df.assign(comp=df[fast] > df[slow]).rename({"comp": system},
-                                                    axis="columns")
-
+    signal = df[df[fast] > df[slow]]
     df[prev] = df[system].shift(2)
-
     df[curr] = df[system].shift(1)
 
     entry = "{} buy entry".format(system)

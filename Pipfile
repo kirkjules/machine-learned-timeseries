@@ -13,6 +13,7 @@ setuptools = "*"
 pandas = "*"
 pyyaml = "*"
 sphinx = "*"
+matplotlib = "*"
 
 [requires]
 python_version = "3.7"
