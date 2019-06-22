@@ -14,7 +14,8 @@ pandas = "*"
 pyyaml = "*"
 sphinx = "*"
 matplotlib = "*"
-line-profiler = "*"
+ipython = "*"
+memory-profiler = "*"
 
 [requires]
 python_version = "3.7"
