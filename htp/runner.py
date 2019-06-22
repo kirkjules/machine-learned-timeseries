@@ -3,6 +3,7 @@ import pandas as pd
 from pprint import pprint
 from htp.api import oanda
 from htp.toolbox import dates, engine
+from htp.analyse import indicator, evaluate
 
 f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 # logging.basicConfig(level=logging.INFO, format=f)
@@ -37,7 +38,17 @@ def main():
         pd.to_datetime(month_clean.index,
                        format="%Y-%m-%dT%H:%M:%S.%f000Z"), drop=True)
     month_sorted = month_index_dt.sort_index()
-    pprint(month_sorted)
+    pprint(month_sorted.head())
+    # Rolling average for last 4 hours
+    sma_16 = indicator.smooth_moving_average(
+        month_sorted, column="close", period=16)
+    # Rolling average for last 24 hours
+    sma_16_96 = indicator.smooth_moving_average(
+        month_sorted, df2=sma_16, column="close", concat=True, period=96)
+    print(sma_16_96.head(20))
+    entry_exit = evaluate.buy_signal_cross(
+        sma_16_96, "close_sma_16", "close_sma_96")
+    print(entry_exit.head(10))
 
 
 if __name__ == "__main__":
