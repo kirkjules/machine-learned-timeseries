@@ -52,9 +52,13 @@ if __name__ == "__main__":
     arguments = {"from": "2018-02-05T22:00:00.000000000Z",
                  "granularity": "D",
                  "smooth": True,
-                 "count": 50}
+                 "count": 200}
     data = oanda.Candles.to_df(instrument=ticker, queryParameters=arguments)
     sma_5 = smooth_moving_average(data, column="close", period=5)
     sma_5_10 = smooth_moving_average(data, df2=sma_5, column="close",
                                      concat=True, period=10)
     print(sma_5_10.head(20))
+    avgs = []
+    for i in [3, 6, 12, 24, 48]:
+        avg = smooth_moving_average(data, column="close", period=i)
+        avgs.append(avg)
