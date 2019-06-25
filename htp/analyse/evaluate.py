@@ -3,52 +3,31 @@ import numpy as np
 import pandas as pd
 
 
-def entry_exit_combine(row, df, entry, exit):
+def entry_exit_combine(df, entry, exit):
     """
-    A function to assign entry and exit timestamps for a given signal.
-
-    The function is designed to be called as an argument to a pandas dataframe
-    apply function.
+    A functin to combine entry and exit timestamps for trades generated via
+    signal cross logic.
 
     Parameters
     ----------
     df : pandas.DataFrame
-        The target dataframe that contains `entry` and `exit` labelled columns.
+        The dataframe that contains the trade signals with respective entry and
+        exit columns.
     entry : str
-        The `entry` column label. This column will contain either True or False
-        values, indicating whether a trade should be entered (True) or not
-        (False).
+        The label for the column containing entry timestamps.
     exit : str
-        The `exit` column label. This column will contain either True or False
-        values, indicating whether a trade should be exited (True) or not
-        (False).
+        The label for the column containing exit timestamps.
 
     Returns
     -------
-    list
-        The list will contain two values. The first value is the timestamp for
-        when a trade should be entered. The second value is the timestamp for
-        when the corresponding trade should be exited.
+    pandas.DataFrame
+        Dataframe will contain two columns, designated "entry" and "exit"
+        respectively. Each row is one trade.
     """
-    if row[entry] == True:
-        reduct = df[row.name:]
-        exit = reduct[reduct[exit] == True].iterrows()
-        try:
-            return [row.name, next(exit)[0]]
-        except StopIteration:
-            return [row.name, np.nan]
-    else:
-        return [np.nan, np.nan]
-
-
-def entry_exit_combine_(df, entry, exit):
-
     en = df.entry[df[entry] == True].reset_index()
     en = en.drop("entry", axis=1).rename(columns={"index": "entry"})
-    print(en.loc[0][0])
     ex = df.exit[df[exit] == True].reset_index()
     ex = ex.drop("exit", axis=1).rename(columns={"index": "exit"})
-    print(ex.loc[0][0])
 
     if ex.loc[0][0] < en.loc[0][0]:
         ex_clean = ex.drop([0], inplace=False)
@@ -56,7 +35,8 @@ def entry_exit_combine_(df, entry, exit):
         ex = ex_clean.reset_index(drop=True, inplace=False)
 
     out = pd.concat([en, ex], axis=1)
-    return out
+    trade = out[~out["exit"].isnull()]
+    return trade
 
 
 def buy_signal_cross(df, fast, slow):
@@ -89,12 +69,8 @@ def buy_signal_cross(df, fast, slow):
         lambda x: x["prev"] is False and x["curr"] is True, axis=1)
     signal["exit"] = signal.apply(
         lambda x: x["prev"] is True and x["curr"] is False, axis=1)
-    trade = signal.apply(entry_exit_combine, axis=1, result_type="expand",
-                         args=(signal, "entry", "exit")).rename(
-                             columns={0: "entry", 1: "exit"})
-    entry_exit = trade[~trade["entry"].isnull()].reset_index(drop=True)
-    trade_ = entry_exit_combine_(signal, "entry", "exit")
-    return entry_exit, trade_
+    trade = entry_exit_combine(signal, "entry", "exit")
+    return trade
 
 
 def sell_signal_cross(df, fast, slow):
@@ -119,7 +95,5 @@ if __name__ == "__main__":
         data_sorted, column="close", period=5)
     sma_5_10 = indicator.smooth_moving_average(
         data_sorted, df2=sma_5, column="close", concat=True, period=10)
-    entry_exit, trade_ = buy_signal_cross(
-        sma_5_10, "close_sma_5", "close_sma_10")
+    entry_exit = buy_signal_cross(sma_5_10, "close_sma_5", "close_sma_10")
     print(entry_exit)
-    print(trade_)
