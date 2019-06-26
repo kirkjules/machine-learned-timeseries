@@ -13,10 +13,10 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
 
     Parameters
     ----------
-    df1 : pandas.DataFrame
+    df1 : pandas.core.frame.DataFrame
         The dataframe from the given column will be specified to use when
         calculating the rolling mean.
-    df2 : pandas.DataFrame
+    df2 : pandas.core.frame.DataFrame
         An optional second dataframe on which to concatenate the generated
         rolling mean. Used when an existing indicator dataframe has been
         started.
@@ -30,7 +30,7 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
 
     Returns
     -------
-    pandas.DataFrame
+    pandas.core.frame.DataFrame
         A dataframe with either the index of df1 and a single column containing
         the calculated rolling mean.
         Or, the above, concatenated to the specified dataframe `df2`.
@@ -47,16 +47,19 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
                      "count": 200}
     >>> data = oanda.Candles.to_df(instrument=ticker,
                                    queryParameters=arguments)
-    >>> data_index_dt = data.set_index(
-            pd.to_datetime(data.index,
-                           format="%Y-%m-%dT%H:%M:%S.%f000Z"), drop=True)
-    >>> data_sorted = data_index_dt.sort_index()
     >>> avgs = []
-    >>> for i in [3, 6, 12, 24, 48]:
-            avg = indicator.smooth_moving_average(data_sorted, column="close",
+    >>> for i in [3, 6, 12, 24]:
+            avg = indicator.smooth_moving_average(data, column="close",
                                                   period=i)
             avgs.append(avg)
+    >>> pd.set_option("display.max_columns", 6)
     >>> pd.concat(avgs, axis=1).tail()
+                         close_sma_3  close_sma_6  close_sma_12  close_sma_24
+    2018-11-05 22:00:00    81.749667    81.116833     80.314333     80.151417
+    2018-11-06 22:00:00    82.134333    81.490667     80.538583     80.232458
+    2018-11-07 22:00:00    82.518333    81.971667     80.796417     80.340250
+    2018-11-08 22:00:00    82.530667    82.140167     81.043000     80.427208
+    2018-11-11 22:00:00    82.227000    82.180667     81.218333     80.487708
     """
     sma = df1[column].rolling(period).mean().rename(
         "{}_sma_{}".format(column, period))
