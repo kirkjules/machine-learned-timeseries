@@ -34,6 +34,29 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
         A dataframe with either the index of df1 and a single column containing
         the calculated rolling mean.
         Or, the above, concatenated to the specified dataframe `df2`.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> from htp.api import oanda
+    >>> from htp.analyse import indicator
+    >>> ticker = "AUD_JPY"
+    >>> arguments = {"from": "2018-02-05T22:00:00.000000000Z",
+                     "granularity": "D",
+                     "smooth": True,
+                     "count": 200}
+    >>> data = oanda.Candles.to_df(instrument=ticker,
+                                   queryParameters=arguments)
+    >>> data_index_dt = data.set_index(
+            pd.to_datetime(data.index,
+                           format="%Y-%m-%dT%H:%M:%S.%f000Z"), drop=True)
+    >>> data_sorted = data_index_dt.sort_index()
+    >>> avgs = []
+    >>> for i in [3, 6, 12, 24, 48]:
+            avg = indicator.smooth_moving_average(data_sorted, column="close",
+                                                  period=i)
+            avgs.append(avg)
+    >>> pd.concat(avgs, axis=1).tail()
     """
     sma = df1[column].rolling(period).mean().rename(
         "{}_sma_{}".format(column, period))
@@ -46,19 +69,9 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
 
 
 if __name__ == "__main__":
-
-    from htp.api import oanda
-    ticker = "AUD_JPY"
-    arguments = {"from": "2018-02-05T22:00:00.000000000Z",
-                 "granularity": "D",
-                 "smooth": True,
-                 "count": 200}
-    data = oanda.Candles.to_df(instrument=ticker, queryParameters=arguments)
-    sma_5 = smooth_moving_average(data, column="close", period=5)
-    sma_5_10 = smooth_moving_average(data, df2=sma_5, column="close",
-                                     concat=True, period=10)
-    print(sma_5_10.head(20))
-    avgs = []
-    for i in [3, 6, 12, 24, 48]:
-        avg = smooth_moving_average(data, column="close", period=i)
-        avgs.append(avg)
+    import sys
+    data = pd.read_csv(sys.argv[1])
+    sma_x = smooth_moving_average(data, column=sys.argv[2], period=sys.argv[3])
+    sma_x_y = smooth_moving_average(data, df2=sma_x, column=sys.argv[2],
+                                    concat=True, period=sys.argv[4])
+    sma_x_y.to_csv("sma_{0}_{1}.csv".format(sys.argv[3], sys.argv[4]))

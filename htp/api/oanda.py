@@ -129,7 +129,7 @@ class Candles(Api):
 
         Returns
         -------
-        dic
+        dict
             The timeseries data that is returned in the response body of the
             GET request. The data is decoded from json to dic format by the
             requests library.
@@ -159,7 +159,7 @@ class Candles(Api):
 
         Returns
         -------
-        pandas.DataFrame
+        pandas.core.frame.DataFrame
             The dic that is returned by the `to_json` class method is further
             manipulated into a pandas DataFrame object.
         csv
@@ -182,11 +182,15 @@ class Candles(Api):
             dic[resp["candles"][i]["time"]] = resp["candles"][i]["mid"]
 
         data = pd.DataFrame.from_dict(dic, orient="index").rename(columns=cols)
+        data_index_dt = data.set_index(
+            pd.to_datetime(data.index,
+                           format="%Y-%m-%dT%H:%M:%S.%f000Z"), drop=True)
+        data_sorted = data_index_dt.sort_index()
 
         if filename is None:
-            return data
+            return data_sorted
         else:
-            return data.to_csv(filename)
+            return data_sorted.to_csv(filename)
 
 
 if __name__ == "__main__":
