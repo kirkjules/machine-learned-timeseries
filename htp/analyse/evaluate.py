@@ -10,7 +10,7 @@ def entry_exit_combine(df, entry, exit):
 
     Parameters
     ----------
-    df : pandas.DataFrame
+    df : pandas.core.frame.DataFrame
         The dataframe that contains the trade signals with respective entry and
         exit columns.
     entry : str
@@ -20,7 +20,7 @@ def entry_exit_combine(df, entry, exit):
 
     Returns
     -------
-    pandas.DataFrame
+    pandas.core.frame.DataFrame
         Dataframe will contain two columns, designated "entry" and "exit"
         respectively. Each row is one trade.
     """
@@ -45,7 +45,7 @@ def signal_cross(df, fast, slow, trade="buy"):
 
     Parameters
     ----------
-    df : pandas.DataFrame
+    df : pandas.core.frame.DataFrame
         The dataframe that contains two signals in their respective columns.
     fast : str
         The column label that corresponds to the fast, more responsive, signal,
@@ -59,7 +59,7 @@ def signal_cross(df, fast, slow, trade="buy"):
 
     Results
     -------
-    pandas.DataFrame
+    pandas.core.frame.DataFrame
         A pandas dataframe that will contain two columns containing the entry
         and exit timestamps respectively for a trade.
     
@@ -85,13 +85,10 @@ def signal_cross(df, fast, slow, trade="buy"):
     >>> sma_5_10 = indicator.smooth_moving_average(data_sorted, column="close",
                                                    df2=sma_5, concat=True,
                                                    period=10)
-    >>> entry_exit = evaluate.buy_signal_cross(sma_5_10, "close_sma_5",
-                                               "close_sma_10")
-    >>> pprint(entry_exit.to_dict("index"))
-    {0: {'entry': Timestamp('2018-03-11 21:00:00'),
-         'exit': Timestamp('2018-03-19 21:00:00')},
-     1: {'entry': Timestamp('2018-04-01 21:00:00'),
-         'exit': Timestamp('2018-04-02 21:00:00')}}
+    >>> evaluate.signal_cross(sma_5_10, "close_sma_5", "close_sma_10")
+                    entry                exit
+    0 2018-03-11 21:00:00 2018-03-19 21:00:00
+    1 2018-04-01 21:00:00 2018-04-02 21:00:00
     """
     if trade == "buy":
         system = "{} > {}".format(fast, slow)
@@ -113,10 +110,12 @@ def signal_cross(df, fast, slow, trade="buy"):
 
 
 if __name__ == "__main__":
+    """
+    python htp/analyse/evaluate.py data/sma_3_6.csv
+    """
 
     import sys
-    indicators = sys.argv[0]
-    df = pd.read_csv(indicators)
-    entry_exit = buy_signal_cross(indicators, indicators.columns[0],
-                                  indicators.columns[1])
-    entry_exit.to_csv[1]
+    data = pd.read_csv(sys.argv[1], header=0, names=["entry", "exit"],
+                       index_col=0, parse_dates=True)
+    entry_exit = signal_cross(data, data.columns[0], data.columns[1])
+    entry_exit.to_csv("data/entryexit.csv")

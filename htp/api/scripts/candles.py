@@ -79,7 +79,6 @@ def clickData(filename, ticker, price, granularity, count, from_, to, smooth,
               includefirst, dailyalignment, weeklyalignment,
               alignmenttimezone):
 
-    print(from_.strftime("%Y-%m-%dT%H:%M:%S.%f000Z"))
     arguments = {"price": price,
                  "granularity": granularity,
                  "count": count,

@@ -61,7 +61,7 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
     2018-11-08 22:00:00    82.530667    82.140167     81.043000     80.427208
     2018-11-11 22:00:00    82.227000    82.180667     81.218333     80.487708
     """
-    sma = df1[column].rolling(period).mean().rename(
+    sma = df1[column].rolling(period).mean().round(5).rename(
         "{}_sma_{}".format(column, period))
 
     if concat:
@@ -72,9 +72,16 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
 
 
 if __name__ == "__main__":
+    """
+    python htp/analyse/indicator.py data/AUD_JPYH120180403-c100.csv close 3 6
+    """
+
     import sys
-    data = pd.read_csv(sys.argv[1])
-    sma_x = smooth_moving_average(data, column=sys.argv[2], period=sys.argv[3])
+    data = pd.read_csv(sys.argv[1], header=0,
+                       names=["open", "high", "low", "close"],
+                       index_col=0, parse_dates=True)
+    sma_x = smooth_moving_average(data, column=sys.argv[2],
+                                  period=int(sys.argv[3]))
     sma_x_y = smooth_moving_average(data, df2=sma_x, column=sys.argv[2],
-                                    concat=True, period=sys.argv[4])
-    sma_x_y.to_csv("sma_{0}_{1}.csv".format(sys.argv[3], sys.argv[4]))
+                                    concat=True, period=int(sys.argv[4]))
+    sma_x_y.to_csv("data/sma_{0}_{1}.csv".format(sys.argv[3], sys.argv[4]))
