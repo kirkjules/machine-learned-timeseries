@@ -268,7 +268,7 @@ def profit_loss(ENTRY=1.0, EXIT=1.1, POS_SIZE=2500, CONV_ASK=1.0, CNT=1):
         The asking price at time of exit for the conversion pair. The
         conversion pair is defined by the account denomination against the
         traded pair counter currency.
-    CNT :  int
+    CNT :  {0, 1}
         Either 0 or 1, to denote whether the account denomination is either
         the base (0) or the counter (1) currency in the conversion pair.
 

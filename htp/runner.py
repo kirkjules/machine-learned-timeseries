@@ -34,21 +34,17 @@ def main():
     month = work.run()
     month_concat = pd.concat(month)
     month_clean = month_concat[~month_concat.index.duplicated()]
-    month_index_dt = month_clean.set_index(
-        pd.to_datetime(month_clean.index,
-                       format="%Y-%m-%dT%H:%M:%S.%f000Z"), drop=True)
-    month_sorted = month_index_dt.sort_index()
-    pprint(month_sorted.head())
+    pprint(month_clean.head())
     # Rolling average for last 4 hours
     sma_16 = indicator.smooth_moving_average(
-        month_sorted, column="close", period=16)
+        month_clean, column="close", period=16)
     # Rolling average for last 24 hours
     sma_16_96 = indicator.smooth_moving_average(
-        month_sorted, df2=sma_16, column="close", concat=True, period=96)
-    print(sma_16_96.head(20))
-    entry_exit = evaluate.buy_signal_cross(
+        month_clean, df2=sma_16, column="close", concat=True, period=96)
+    print(sma_16_96.tail())
+    entry_exit = evaluate.signal_cross(
         sma_16_96, "close_sma_16", "close_sma_96")
-    print(entry_exit.head(10))
+    print(entry_exit.head())
 
 
 if __name__ == "__main__":

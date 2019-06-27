@@ -1,12 +1,16 @@
+"""A command line script to query ticker data directly from the oanda api.
+
+E.g. candles "data/AUD_JPYH120180403-c100.csv" "AUD_JPY" --granularity "H1"
+--from "2018-04-03 22:00:00" --count 100
+"""
 import click
 from htp.api import oanda
-from datetime import datetime
 
 
 def fmt(date):
-    # obj = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
-    str_ = datetime.strftime(date, "%Y-%m-%dT%H:%M:%S.%f000Z")
-    return str_
+    if date is not None:
+        str_ = date.strftime("%Y-%m-%dT%H:%M:%S.%f000Z")
+        return str_
 
 
 @click.command()
@@ -75,6 +79,7 @@ def clickData(filename, ticker, price, granularity, count, from_, to, smooth,
               includefirst, dailyalignment, weeklyalignment,
               alignmenttimezone):
 
+    print(from_.strftime("%Y-%m-%dT%H:%M:%S.%f000Z"))
     arguments = {"price": price,
                  "granularity": granularity,
                  "count": count,
@@ -93,6 +98,6 @@ def clickData(filename, ticker, price, granularity, count, from_, to, smooth,
     else:
         del arguments["count"]
 
-    r = oanda.Candles(**{"instrument": ticker, "queryParameters": arguments})
-    r.df(filename=filename)
+    oanda.Candles.to_df(filename=filename,
+                        **{"instrument": ticker, "queryParameters": arguments})
     click.echo("Download complete")
