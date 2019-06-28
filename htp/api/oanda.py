@@ -178,8 +178,10 @@ class Candles(Api):
         cols = {"o": "open", "h": "high", "l": "low", "c": "close"}
 
         resp = cls.to_json(**kwargs)
+        pr = "".join([i for i in ["mid", "bid", "ask"]
+                      if i in resp["candles"][0].keys()])
         for i in range(len(resp["candles"])):
-            dic[resp["candles"][i]["time"]] = resp["candles"][i]["mid"]
+            dic[resp["candles"][i]["time"]] = resp["candles"][i][pr]
 
         data = pd.DataFrame.from_dict(dic, orient="index").rename(columns=cols)
         data_index_dt = data.set_index(

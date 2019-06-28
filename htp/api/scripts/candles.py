@@ -28,7 +28,7 @@ def fmt(date):
               help="The granularity of the candlesticks to fetch")
 @click.option("--count",
               default="500",
-              type=click.IntRange(500, 5000, clamp=True),
+              type=click.IntRange(1, 5000, clamp=True),
               help="The number of candlesticks to return in the reponse.\
               Count should not be specified if both the start and end\
               parameters are provided, as the time range combined with the\
@@ -90,10 +90,8 @@ def clickData(filename, ticker, price, granularity, count, from_, to, smooth,
                  "alignmentTimezone": alignmenttimezone,
                  "weeklyAlignment": weeklyalignment}
 
-    if from_ is None:
-        del arguments["from"]
+    if to is None:
         del arguments["to"]
-        del arguments["includeFirst"]
     else:
         del arguments["count"]
 

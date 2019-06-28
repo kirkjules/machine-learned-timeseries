@@ -1,8 +1,9 @@
 import logging
 import pandas as pd
 from pprint import pprint
+from decimal import Decimal
 from htp.api import oanda
-from htp.toolbox import dates, engine
+from htp.toolbox import dates, engine, calculator
 from htp.analyse import indicator, evaluate
 
 f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -15,15 +16,11 @@ fh.setFormatter(fh_formatter)
 logger.addHandler(fh)
 
 
-def main():
+def setup(instrument, queryParameters, from_, to):
 
-    instrument = "AUD_JPY"
-    queryParameters = {"granularity": "M15"}
     func = oanda.Candles.to_df
-    queue_month = dates.Select(from_="2005-01-01 17:00:00",
-                               to="2005-12-30 17:00:00",
-                               local_tz="America/New_York"
-                               ).by_month()
+    queue_month = dates.Select(
+        from_=from_, to=to, local_tz="America/New_York").by_month()
     date_list = []
     for i in queue_month:
         date_list.append(i)
@@ -34,10 +31,35 @@ def main():
     month = work.run()
     month_concat = pd.concat(month)
     month_clean = month_concat[~month_concat.index.duplicated()]
+    return month_clean.sort_index()
+
+
+def sig_data(instrument, queryParameters, price, from_, to, sig, sig_frame):
+
+    queryParameters["price"] = price
+    sig_clean_price = setup(
+        instrument=instrument, queryParameters=queryParameters, from_=from_,
+        to=to)
+    entry_exit_price = sig_frame.merge(
+        sig_clean_price["open"].to_frame(), how="left", left_on=sig,
+        right_index=True, validate="1:1").rename(
+            columns={"open": "{0}_{1}".format(sig, price)})
+    return entry_exit_price
+
+
+def main():
+
+    instrument = "AUD_JPY"
+    queryParameters = {"granularity": "M15"}
+    from_ = "2019-01-01 17:00:00"
+    to = "2019-06-27 17:00:00"
+    month_clean = setup(instrument=instrument, queryParameters=queryParameters,
+                        from_=from_, to=to)
     pprint(month_clean.head())
     # Rolling average for last 4 hours
     sma_16 = indicator.smooth_moving_average(
         month_clean, column="close", period=16)
+    print(sma_16.tail())
     # Rolling average for last 24 hours
     sma_16_96 = indicator.smooth_moving_average(
         month_clean, df2=sma_16, column="close", concat=True, period=96)
@@ -45,10 +67,46 @@ def main():
     entry_exit = evaluate.signal_cross(
         sma_16_96, "close_sma_16", "close_sma_96")
     print(entry_exit.head())
+    entry_exit_ask = sig_data(
+        instrument=instrument, queryParameters=queryParameters, from_=from_,
+        to=to, price="A", sig="entry", sig_frame=entry_exit)
+    print(entry_exit_ask.head())
+    entry_exit_ask_bid = sig_data(
+        instrument=instrument, queryParameters=queryParameters, from_=from_,
+        to=to, price="B", sig="exit", sig_frame=entry_exit_ask)
+    entry_exit_sort = entry_exit_ask_bid.sort_values(
+        by=["entry"]).reset_index(drop=True)
+    print(entry_exit_sort.head())
+    entry_exit_sort["P/L PIPS"] = entry_exit_sort.apply(
+        lambda x: (
+            (Decimal(x["exit_B"]) - Decimal(x["entry_A"]))
+            * Decimal("100")).quantize(Decimal(".1")), axis=1)
+    AMOUNT = 1000
+    STOP = 50
+    KNOWN_RATIO = 0.01
+    RISK_PERC = 0.01
+    d_pos_size = {}
+    for i in entry_exit_sort.iterrows():
+        tr = i[1]
+        size = calculator.base_conv_pos_size(
+            ACC_AMOUNT=AMOUNT, CONV_ASK=tr["entry_A"], STOP=STOP,
+            KNOWN_RATIO=KNOWN_RATIO, RISK_PERC=RISK_PERC)
+        profit = calculator.profit_loss(
+            ENTRY=tr["entry_A"], EXIT=tr["exit_B"], POS_SIZE=size,
+            CONV_ASK=tr["entry_A"], CNT=0)
+        AMOUNT += profit
+        d_pos_size[tr["entry"]] = {"POS_SIZE": size, "P/L AUD": profit,
+                                   "P/L REALISED": AMOUNT}
+    counting = pd.DataFrame.from_dict(d_pos_size, orient="index")
+    entry_exit_complete = entry_exit_sort.merge(
+        counting, how="left", left_on="entry", right_index=True,
+        validate="1:1")
+
+    return month_clean, sma_16_96, entry_exit_complete
 
 
 if __name__ == "__main__":
-    main()
+    month_clean, sma_16_96, entry_exit = main()
 
 # ["AUD_CAD", "NZD_USD", "NZD_JPY", "AUD_JPY", "AUD_NZD",
 # "AUD_USD", "USD_JPY", "USD_CHF", "GBP_CHF", "NZD_CAD", "CAD_JPY",

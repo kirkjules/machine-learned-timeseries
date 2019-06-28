@@ -4,7 +4,7 @@ import decimal
 import functools
 
 
-def standardise_decimal(func):
+def std_dec(func):
     """
     A decorator to convert all keyword arguments to Decimal objects in the
     wrapped function.
@@ -54,7 +54,7 @@ def standardise_decimal(func):
 # KNOWN_RATIO_YEN = (1, 0.01)
 
 
-@standardise_decimal
+@std_dec
 def counter_pos_size(ACC_AMOUNT=1000, STOP=100, KNOWN_RATIO=0.0001,
                      RISK_PERC=0.01):
     """
@@ -98,7 +98,7 @@ def counter_pos_size(ACC_AMOUNT=1000, STOP=100, KNOWN_RATIO=0.0001,
             decimal.Decimal("1."), rounding=decimal.ROUND_UP)
 
 
-@standardise_decimal
+@std_dec
 def base_pos_size(ACC_AMOUNT=1000, TARGET_ASK=1.0000, STOP=100,
                   KNOWN_RATIO=0.0001, RISK_PERC=0.01):
     """
@@ -147,7 +147,7 @@ def base_pos_size(ACC_AMOUNT=1000, TARGET_ASK=1.0000, STOP=100,
             decimal.Decimal("1."), rounding=decimal.ROUND_UP)
 
 
-@standardise_decimal
+@std_dec
 def counter_conv_pos_size(ACC_AMOUNT=1000.00, CONV_ASK=1.0000, STOP=100,
                           KNOWN_RATIO=0.0001, RISK_PERC=0.01):
     """
@@ -199,7 +199,7 @@ def counter_conv_pos_size(ACC_AMOUNT=1000.00, CONV_ASK=1.0000, STOP=100,
             decimal.Decimal("1."), rounding=decimal.ROUND_UP)
 
 
-@standardise_decimal
+@std_dec
 def base_conv_pos_size(ACC_AMOUNT=1000, CONV_ASK=1.0000, STOP=100,
                        KNOWN_RATIO=0.0001, RISK_PERC=0.01):
     """
@@ -251,7 +251,7 @@ def base_conv_pos_size(ACC_AMOUNT=1000, CONV_ASK=1.0000, STOP=100,
             decimal.Decimal("1."), rounding=decimal.ROUND_UP)
 
 
-@standardise_decimal
+@std_dec
 def profit_loss(ENTRY=1.0, EXIT=1.1, POS_SIZE=2500, CONV_ASK=1.0, CNT=1):
     """
     Profit and loss calculator for buy trades.
@@ -301,4 +301,4 @@ def profit_loss(ENTRY=1.0, EXIT=1.1, POS_SIZE=2500, CONV_ASK=1.0, CNT=1):
     ACC_AMOUNT = CURR_DELTA * POS_SIZE
 
     return ACC_AMOUNT.quantize(
-            decimal.Decimal("0.00001"), rounding=decimal.ROUND_HALF_EVEN)
+            decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)

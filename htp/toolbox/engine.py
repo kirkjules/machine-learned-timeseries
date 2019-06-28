@@ -4,6 +4,7 @@ import logging
 import multiprocessing
 from queue import Queue
 from threading import Thread, Lock
+from htp.api import exceptions
 
 log = logging.getLogger(__name__)
 
@@ -208,8 +209,8 @@ class ParallelWorker(Worker):
 if __name__ == "__main__":
     import time
     from pprint import pprint
+    from htp.api import oanda
     from htp.toolbox import dates
-    from htp.api import oanda, exceptions
 
     f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     logging.basicConfig(level=logging.INFO, format=f)

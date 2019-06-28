@@ -115,7 +115,14 @@ if __name__ == "__main__":
     """
 
     import sys
+    import re
     data = pd.read_csv(sys.argv[1], header=0, names=["entry", "exit"],
                        index_col=0, parse_dates=True)
     entry_exit = signal_cross(data, data.columns[0], data.columns[1])
-    entry_exit.to_csv("data/entryexit.csv")
+    sf = "entry_exit.csv".format()
+    try:
+        fn = "{0}_{1}".format(re.search(r"\/(.*?)\.csv", sys.argv[1]).group(1),
+                              sf)
+    except AttributeError:
+        fn = sf
+    entry_exit.to_csv("data/{0}".format(fn))
