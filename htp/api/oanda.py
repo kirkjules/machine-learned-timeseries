@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 class Candles(Api):
     """
     A request operation that queries the Oanda instrument.Candles endpoint for
-    ticker timeseries data.
+    a given ticker's timeseries data.
 
     The class inherits from Api, reading in API variables from a `.yaml`
     configuration file which are required to complete a GET HTTP request to the
@@ -35,7 +35,7 @@ class Candles(Api):
         to being queried via the target endpoint.
     url : str
         The URL query string the defines the target endpoint.
-    queryParameters : dic
+    queryParameters : dict
         A class attribute defined by a kwarg, key, value pair with the key set
         to `queryParameters` and the value a dictionary with keys matching the
         available endpoint parameters and corresponding permitted value. See
@@ -57,10 +57,14 @@ class Candles(Api):
         it was not possible to connect to the URL's server due to a lack of
         network connection.
 
-    OandaException
+    exceptions.OandaException
         If the response status code is not 200. Here, the endpoint has provided
         a reason in the in the response body and this exposed by the exception.
         An example case is where the authorization token is incorrect.
+
+    See Also
+    --------
+    htp.api : Api
 
     Notes
     -----
@@ -79,9 +83,39 @@ class Candles(Api):
       maximum candle count value an error will be reported by the api
       with a HTTP 400 status and logged by the Candles class.
 
-    See Also
+    Examples
     --------
-    htp.api : Api
+    >>> import os
+    >>> from pprint import pprint
+    >>> from htp.api.oanda import Candles
+    >>> ticker = "EUR_USD"
+    >>> arguments = {"from": "2019-06-27T17:00:00.000000000Z", "count": "3"}
+    >>> cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
+    >>> data = Candles(configFile=cf, instrument=ticker, queryParameters=arguments)
+    >>> pprint(data.r.json())
+    {'candles': [{'complete': True,
+                  'mid': {'c': '1.13664',
+                          'h': '1.13664',
+                          'l': '1.13662',
+                          'o': '1.13662'},
+                  'time': '2019-06-27T17:00:00.000000000Z',
+                  'volume': 2},
+                 {'complete': True,
+                  'mid': {'c': '1.13662',
+                          'h': '1.13662',
+                          'l': '1.13662',
+                          'o': '1.13662'},
+                  'time': '2019-06-27T17:00:05.000000000Z',
+                  'volume': 1},
+                 {'complete': True,
+                  'mid': {'c': '1.13666',
+                          'h': '1.13666',
+                          'l': '1.13664',
+                          'o': '1.13664'},
+                  'time': '2019-06-27T17:00:10.000000000Z',
+                  'volume': 2}],
+     'granularity': 'S5',
+     'instrument': 'EUR_USD'}
     """
 
     def __init__(self, configFile="config.yaml", api="oanda",
@@ -139,6 +173,37 @@ class Candles(Api):
         Candles.__init__ : The GET HTTP request to the API endpoint.
         Candles.to_dic : The class method that returns the to_json output in a
                          pandas DataFrame.
+
+        Examples
+        --------
+        >>> from pprint import pprint
+        >>> from htp.api.oanda import Candles
+        >>> ticker = "EUR_USD"
+        >>> arguments = {"from": "2019-06-27T17:00:00.000000000Z", "count": "3"}
+        >>> pprint(Candles.to_json(instrument=ticker, queryParameters=arguments))
+        {'candles': [{'complete': True,
+                      'mid': {'c': '1.13664',
+                              'h': '1.13664',
+                              'l': '1.13662',
+                              'o': '1.13662'},
+                      'time': '2019-06-27T17:00:00.000000000Z',
+                      'volume': 2},
+                     {'complete': True,
+                      'mid': {'c': '1.13662',
+                              'h': '1.13662',
+                              'l': '1.13662',
+                              'o': '1.13662'},
+                      'time': '2019-06-27T17:00:05.000000000Z',
+                      'volume': 1},
+                     {'complete': True,
+                      'mid': {'c': '1.13666',
+                              'h': '1.13666',
+                              'l': '1.13664',
+                              'o': '1.13664'},
+                      'time': '2019-06-27T17:00:10.000000000Z',
+                      'volume': 2}],
+         'granularity': 'S5',
+         'instrument': 'EUR_USD'}
         """
         return cls(**kwargs).r.json()
 
@@ -171,6 +236,18 @@ class Candles(Api):
         Candles.__init__ : The GET HTTP request to the API endpoint.
         Candles.to_json : The class method that returns the endpoint response's
                           body in dic format.
+
+        Examples
+        --------
+        >>> from pprint import pprint
+        >>> from htp.api.oanda import Candles
+        >>> ticker = "EUR_USD"
+        >>> arguments = {"from": "2019-06-27T17:00:00.000000000Z", "count": "3"}
+        >>> pprint(Candles.to_df(instrument=ticker, queryParameters=arguments))
+                                open     high      low    close
+        2019-06-27 17:00:00  1.13662  1.13664  1.13662  1.13664
+        2019-06-27 17:00:05  1.13662  1.13662  1.13662  1.13662
+        2019-06-27 17:00:10  1.13664  1.13666  1.13664  1.13666
         """
 
         dic = {}
@@ -196,16 +273,12 @@ class Candles(Api):
 
 
 if __name__ == "__main__":
-
-    import os
-    from pprint import pprint
-
-    ticker = "EUR_USD"
-    arguments = {"count": "6", "price": "M", "granularity": "S5"}
-    cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
-    data = Candles(configFile=cf, instrument=ticker, queryParameters=arguments)
-    pprint(data.r.json())
-    pprint(Candles.to_json(configFile=cf, instrument=ticker,
-                           queryParameters=arguments))
-    pprint(Candles.to_df(configFile=cf, instrument=ticker,
-                         queryParameters=arguments))
+    """
+    python htp/api/oanda.py "AUD_JPY" "2018-06-25T16:00:00.000000000Z" 50 "M15" out.csv
+    """
+    import sys
+    ticker = sys.argv[1]
+    queryParameters = {
+        "from": sys.argv[2], "count": sys.argv[3], "granularity": sys.argv[4]}
+    Candles.to_df(
+        filename=sys.argv[5], instrument=ticker, queryParameters=queryParameters)

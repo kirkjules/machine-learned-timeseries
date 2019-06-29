@@ -16,9 +16,9 @@ class Api:
 
     Most programs that offer an API will require identifying variables, for
     example an authentication token, to engage with its endpoints. The
-    variables stored in a local `.yaml` file will be in the stored in the
-    `details` attribute. This attribute can then be used by a class defined in
-    a sub-module via inheritance.
+    variables stored in a local `.yaml` file will be read into the `details`
+    attribute. This attribute can then be used by a class defined in a
+    sub-module via inheritance.
 
 
     Parameters
@@ -41,7 +41,7 @@ class Api:
 
     Attributes
     ----------
-    details : dic
+    details : dict
         Stores the variables sourced from the configuration file in a
         dictionary.
 
@@ -49,18 +49,18 @@ class Api:
     Notes
     -----
     The class is intended to be inherited in submodules written to engage with
-    a specific API. It is in those respective modules' top level class that the
-    parameters will be redfined appropriately.
+    a specific API. It is in those respective modules' top level class where
+    the parameters will be redfined appropriately.
 
 
     Examples
     --------
     >>> from htp.api import Api
+    >>> from pprint import pprint
     >>> var = Api(configFile="config.yaml", api="oanda", access="practise")
-    >>> var.details
+    >>> pprint(var.details)
     {'account-id': '101-011-6215953-001',
-     'token': 'a4c4164e10bd1c4e5afb3038340c444f-'
-     'a349aec867b5faed0113ed23c984193b',
+     'token': 'a4c4164e10bd1c4e5afb3038340c444f-a349aec867b5faed0113ed23c984193b',
      'url': 'https://api-fxpractice.oanda.com/v3/'}
 
     """
