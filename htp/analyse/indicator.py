@@ -39,20 +39,15 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
     Examples
     --------
     >>> import pandas as pd
-    >>> from htp.api import oanda
-    >>> from htp.analyse import indicator
+    >>> from htp.api.oanda import Candles
     >>> ticker = "AUD_JPY"
     >>> arguments = {"from": "2018-02-05T22:00:00.000000000Z",
-                     "granularity": "D",
-                     "smooth": True,
-                     "count": 200}
-    >>> data = oanda.Candles.to_df(instrument=ticker,
-                                   queryParameters=arguments)
+    ...              "granularity": "D", "smooth": True, "count": 200}
+    >>> data = Candles.to_df(instrument=ticker, queryParameters=arguments)
     >>> avgs = []
     >>> for i in [3, 6, 12, 24]:
-            avg = indicator.smooth_moving_average(data, column="close",
-                                                  period=i)
-            avgs.append(avg)
+    ...     avg = smooth_moving_average(data, column="close", period=i)
+    ...     avgs.append(avg)
     >>> pd.set_option("display.max_columns", 6)
     >>> pd.concat(avgs, axis=1).tail()
                          close_sma_3  close_sma_6  close_sma_12  close_sma_24

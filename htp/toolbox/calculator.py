@@ -1,6 +1,8 @@
 """Module for calculating position sizes."""
 
+import copy
 import decimal
+import datetime
 import functools
 
 
@@ -82,11 +84,10 @@ def counter_pos_size(ACC_AMOUNT=1000, STOP=100, KNOWN_RATIO=0.0001,
 
     Examples
     --------
-    >>> from htp.toolbox import calculator
-    >>> pos_size = calculator.counter_pos_size(ACC_AMOUNT=1000, STOP=100,
-                                               KNOWN_RATIO=0.0001,
-                                               RISK_PERC=0.01)
+    >>> pos_size = counter_pos_size(
+    ...     ACC_AMOUNT=1000, STOP=100, KNOWN_RATIO=0.0001, RISK_PERC=0.01)
     >>> print(pos_size)
+    1000
     """
     MAX_RISK_ACC_CURR = ACC_AMOUNT * RISK_PERC
 
@@ -128,11 +129,11 @@ def base_pos_size(ACC_AMOUNT=1000, TARGET_ASK=1.0000, STOP=100,
 
     Examples
     --------
-    >>> from htp.toolbox import calculator
-    >>> pos_size = calculator.base_pos_size(ACC_AMOUNT=1000,
-                                            TARGET_ASK=1.0000, STOP=100,
-                                            KNOWN_RATIO=0.0001, RISK_PERC=0.01)
+    >>> pos_size = base_pos_size(
+    ...     ACC_AMOUNT=1000, TARGET_ASK=1.0000, STOP=100, KNOWN_RATIO=0.0001,
+    ...     RISK_PERC=0.01)
     >>> print(pos_size)
+    1000
     """
 
     MAX_RISK_ACC_CURR = ACC_AMOUNT * RISK_PERC
@@ -180,11 +181,11 @@ def counter_conv_pos_size(ACC_AMOUNT=1000.00, CONV_ASK=1.0000, STOP=100,
 
     Examples
     --------
-    >>> from htp.toolbox import calculator
-    >>> pos_size = calculator.counter_conv_pos_size(
-                     ACC_AMOUNT=1000, CONV_ASK=1.0000,
-                     STOP=100, KNOWN_RATIO=0.0001, RISK_PERC=0.01)
+    >>> pos_size = counter_conv_pos_size(
+    ...     ACC_AMOUNT=1000, CONV_ASK=1.0000, STOP=100, KNOWN_RATIO=0.0001,
+    ...     RISK_PERC=0.01)
     >>> print(pos_size)
+    1000
     """
 
     MAX_RISK_ACC_CURR = ACC_AMOUNT * RISK_PERC
@@ -232,11 +233,11 @@ def base_conv_pos_size(ACC_AMOUNT=1000, CONV_ASK=1.0000, STOP=100,
 
     Examples
     --------
-    >>> from htp.toolbox import calculator
-    >>> pos_size = calculator.base_conv_pos_size(
-                     ACC_AMOUNT=1000, CON_ASK=1.000,
-                     STOP=100, KNOWN_RATIO=0.0001, RISK_PERC=0.01)
+    >>> pos_size = base_conv_pos_size(
+    ...     ACC_AMOUNT=1000, CONV_ASK=1.000, STOP=100, KNOWN_RATIO=0.0001,
+    ...     RISK_PERC=0.01)
     >>> print(pos_size)
+    1000
     """
 
     MAX_RISK_ACC_CURR = ACC_AMOUNT * RISK_PERC
@@ -279,14 +280,10 @@ def profit_loss(ENTRY=1.0, EXIT=1.1, POS_SIZE=2500, CONV_ASK=1.0, CNT=1):
 
     Examples
     --------
-    >>> from htp.toolbox import calculator
-    >>> profit_loss_amount = calculator.profit_loss(ENTRY=2.1443,
-                                                    EXIT=2.1452,
-                                                    POS_SIZE=1000,
-                                                    CONV_ASK=1.1025,
-                                                    CNT=1)
+    >>> profit_loss_amount = profit_loss(
+    ...     ENTRY=2.1443, EXIT=2.1452, POS_SIZE=1000, CONV_ASK=1.1025, CNT=1)
     >>> print(profit_loss_amount)
-    0.99225
+    0.99
     """
     PIP_DELTA = EXIT - ENTRY
 
@@ -302,3 +299,73 @@ def profit_loss(ENTRY=1.0, EXIT=1.1, POS_SIZE=2500, CONV_ASK=1.0, CNT=1):
 
     return ACC_AMOUNT.quantize(
             decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)
+
+
+def performance_stats(results):
+    """
+    Function to assess the performance of a given trading system.
+
+    Parameters
+    ----------
+    results : pandas.core.frame.DataFrame
+        The dataframe that contain all trades by a given system, with entry and
+        exit timestamps and prices, position size, profit & loss in pips and
+        AUD, as well as realised and loss as a cumulative sum over time.
+
+    Returns
+    -------
+    pandas.core.frame.Data
+        A pandas dataframe that outlines the Net Profit, Win %, Loss %, Largest
+        Winning Trade, Largest Losing Trade, Average Winning Trade, Average
+        Losing Trade, Payoff Ratio per Trade, Average Holding Time per Trade,
+        Largest # Consecutive Losses, Average # Consecutive Losses, Trading
+        Expectancy.
+    """
+
+    stats = {}
+    stats["net_profit"] = results.iloc[-1]["P/L REALISED"] - 1000
+
+    stats["win_%"] = decimal.Decimal(
+        results[results["P/L AUD"] > 0]["P/L AUD"].count() /
+        results["P/L AUD"].count() *
+        100).quantize(decimal.Decimal("0.01"))
+    stats["loss_%"] = decimal.Decimal(
+        results[results["P/L AUD"] < 0]["P/L AUD"].count() /
+        results["P/L AUD"].count() *
+        100).quantize(decimal.Decimal("0.01"))
+
+    stats["win_max"] = results["P/L AUD"].max()
+    stats["loss_max"] = results["P/L AUD"].min()
+
+    stats["win_mean"] = decimal.Decimal(
+        results[results["P/L AUD"] > 0]["P/L AUD"].mean()
+        ).quantize(decimal.Decimal("0.01"))
+    stats["loss_mean"] = decimal.Decimal(
+        results[results["P/L AUD"] < 0]["P/L AUD"].mean()
+        ).quantize(decimal.Decimal("0.01"))
+
+    holding_time = results["exit"] - results["entry"]
+    stats["average_holding_time_per_trade"] = str(
+        datetime.timedelta(seconds=holding_time.mean().seconds))
+
+    cons_loss = 0
+    list_cons_loss = []
+    for row in results.iterrows():
+        if row[1]["P/L AUD"] < 0:
+            cons_loss += 1
+            if cons_loss == 1:
+                list_cons_loss.append(copy.deepcopy(cons_loss))
+            else:
+                list_cons_loss[-1] = copy.deepcopy(cons_loss)
+        elif row[1]["P/L AUD"] >= 0:
+            cons_loss = 0
+
+    stats["max_cons_loss"] = decimal.Decimal(max(list_cons_loss))
+    stats["mean_cons_loss"] = decimal.Decimal(
+        sum(list_cons_loss) / len(list_cons_loss)
+        ).quantize(decimal.Decimal("1."))
+
+    stats["trading_exp"] = (stats["win_%"] * stats["win_mean"]) +\
+        (stats["loss_%"] * stats["loss_mean"])
+
+    return stats

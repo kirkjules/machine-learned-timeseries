@@ -1,12 +1,13 @@
+import copy
 import logging
 import pandas as pd
-from pprint import pprint
+# from pprint import pprint
 from decimal import Decimal
 from htp.api import oanda
 from htp.toolbox import dates, engine, calculator
 from htp.analyse import indicator, evaluate
 
-f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+f = "%(asctime)s - %(name)s - %(message)s"
 # logging.basicConfig(level=logging.INFO, format=f)
 logger = logging.getLogger("htp.toolbox.engine")
 logger.setLevel(level=logging.INFO)
@@ -16,97 +17,211 @@ fh.setFormatter(fh_formatter)
 logger.addHandler(fh)
 
 
-def setup(instrument, queryParameters, from_, to):
+def setup(func, instrument, queryParameters):
+    """
+    Wrapper function that groups arguments parsing, data querying and data
+    clean up.
 
-    func = oanda.Candles.to_df
-    queue_month = dates.Select(
-        from_=from_, to=to, local_tz="America/New_York").by_month()
+    Parameters
+    ----------
+    func : {"oanda.Candles.to_json", "oanda.Candles.to_df"}
+        The function that should be used to query the ticker data.
+
+    instrument : str
+        The ticker instrument whose timeseries should be queried.
+
+    queryParameters : dict
+        Variables that will be parsed in the request body onto the api
+        endpoint.
+
+    Returns
+    -------
+    pandas.core.frame.DataFrame
+        The timeseries ticker data stored in a pandas DataFrame and sorted by
+        datetime index.
+
+    Notes
+    -----
+    Flow
+    1. State date/time range with datetime strings listed in ISO-8601 format.
+    2. Convert date/time to UTC.
+    Note: Parse to query in RFC3339 format: "YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ"
+    3. State granularity
+    Note: daily candles should keep default setting for dailyAlignment and
+            alignmentTimezone settings. Smooth must be set to True to ensure
+            same values as displayed by Oanda on the online portal.
+    4. Query data.
+    Note: any actions logged will be in UTC time. If the user needs a timestamp
+            displayed in local time this functionality will be applied in the
+            relevant functions and methods.
+    """
+
+    queryParameters_copy = copy.deepcopy(queryParameters)
+    queue_dates = dates.Select(
+        from_=queryParameters_copy["from"], to=queryParameters_copy["to"],
+        local_tz="America/New_York").by_month()
     date_list = []
-    for i in queue_month:
+    for i in queue_dates:
         date_list.append(i)
     work = engine.ParallelWorker(date_gen=date_list,
                                  func=func,
                                  instrument=instrument,
-                                 queryParameters=queryParameters)
-    month = work.run()
-    month_concat = pd.concat(month)
-    month_clean = month_concat[~month_concat.index.duplicated()]
-    return month_clean.sort_index()
+                                 queryParameters=queryParameters_copy)
+    data_query = work.run()
+    data_concat = pd.concat(data_query)
+    data_clean = data_concat[~data_concat.index.duplicated()]
+    data = data_clean.sort_index()
+    data.name = "{}".format(queryParameters_copy["price"])
+    return data
 
 
-def sig_data(instrument, queryParameters, price, from_, to, sig, sig_frame):
+def signal(data_price_in, data_price_out, sig_frame, system):
+    """
+    Append price data to entry and exit timestamps generated from signals
+    crossing.
 
-    queryParameters["price"] = price
-    sig_clean_price = setup(
-        instrument=instrument, queryParameters=queryParameters, from_=from_,
-        to=to)
-    entry_exit_price = sig_frame.merge(
-        sig_clean_price["open"].to_frame(), how="left", left_on=sig,
+    Parameters
+    ----------
+    data_price_in : pandas.core.frame.DataFrame
+        The dataframe that contains the real entry price, i.e. the ask or bid
+
+    data_price_out : pandas.core.frame.DataFrame
+        The dataframe that contains the real exit price, i.e. the ask or bid
+
+    sig_frame : pandas.core.frame.DataFrame
+        The dataframe containing the signals to be assessed against each other
+        to provide entry and exit timestamps.
+
+    system : tuple
+        The signals that should be assessed against each other.
+
+    Returns
+    -------
+    pandas.core.frame_DataFrame
+        A pandas dataframe with the action price appended in an appropriately
+        labelled column, matching the format: {sig_col}_{price}.
+
+    Notes
+    -----
+    For a buy trade, the ask price is used for entry and the bid price is used
+    for exit.
+    For a sell trade, the bid price is used for entry and the ask price is used
+    for exit.
+    """
+    entry_exit = evaluate.signal_cross(sig_frame, system[0], system[1])
+
+    entry_exit_in = entry_exit.merge(
+        data_price_in["open"].to_frame(), how="left", left_on="entry",
         right_index=True, validate="1:1").rename(
-            columns={"open": "{0}_{1}".format(sig, price)})
-    return entry_exit_price
+            columns={"open": "entry_{}".format(data_price_in.name)})
 
+    entry_exit_in_out = entry_exit_in.merge(
+        data_price_out["open"].to_frame(), how="left", left_on="exit",
+        right_index=True, validate="1:1").rename(
+            columns={"open": "exit_{}".format(data_price_out.name)})
 
-def main():
-
-    instrument = "AUD_JPY"
-    queryParameters = {"granularity": "M15"}
-    from_ = "2019-01-01 17:00:00"
-    to = "2019-06-27 17:00:00"
-    month_clean = setup(instrument=instrument, queryParameters=queryParameters,
-                        from_=from_, to=to)
-    pprint(month_clean.head())
-    # Rolling average for last 4 hours
-    sma_16 = indicator.smooth_moving_average(
-        month_clean, column="close", period=16)
-    print(sma_16.tail())
-    # Rolling average for last 24 hours
-    sma_16_96 = indicator.smooth_moving_average(
-        month_clean, df2=sma_16, column="close", concat=True, period=96)
-    print(sma_16_96.tail())
-    entry_exit = evaluate.signal_cross(
-        sma_16_96, "close_sma_16", "close_sma_96")
-    print(entry_exit.head())
-    entry_exit_ask = sig_data(
-        instrument=instrument, queryParameters=queryParameters, from_=from_,
-        to=to, price="A", sig="entry", sig_frame=entry_exit)
-    print(entry_exit_ask.head())
-    entry_exit_ask_bid = sig_data(
-        instrument=instrument, queryParameters=queryParameters, from_=from_,
-        to=to, price="B", sig="exit", sig_frame=entry_exit_ask)
-    entry_exit_sort = entry_exit_ask_bid.sort_values(
+    entry_exit_sort = entry_exit_in_out.sort_values(
         by=["entry"]).reset_index(drop=True)
-    print(entry_exit_sort.head())
-    entry_exit_sort["P/L PIPS"] = entry_exit_sort.apply(
-        lambda x: (
-            (Decimal(x["exit_B"]) - Decimal(x["entry_A"]))
-            * Decimal("100")).quantize(Decimal(".1")), axis=1)
+
+    return entry_exit_sort
+
+
+def count(trades):
+    """
+    Function to calculate trade information: P/L Pips, P/L AUD, Position Size,
+    Realised P/L.
+
+    Parameters
+    ----------
+    trades : pandas.core.frame.DataFrame
+        A pandas dataframe that contains entry and exit prices in respective
+        columns, with each row representing a individual trade.
+
+    Returns
+    -------
+    pandas.core.frame.DataFrame
+        The original parsed dataframe with appended columns contain the
+        calculated information respective to each trade.
+    """
     AMOUNT = 1000
     STOP = 50
     KNOWN_RATIO = 0.01
     RISK_PERC = 0.01
+    trades["P/L PIPS"] = trades.apply(
+        lambda x: (
+            (Decimal(x["exit_B"]) - Decimal(x["entry_A"]))
+            * Decimal("100")).quantize(Decimal(".1")), axis=1)
     d_pos_size = {}
-    for i in entry_exit_sort.iterrows():
-        tr = i[1]
+    for i in trades.iterrows():
+        trade = i[1]
         size = calculator.base_conv_pos_size(
-            ACC_AMOUNT=AMOUNT, CONV_ASK=tr["entry_A"], STOP=STOP,
+            ACC_AMOUNT=AMOUNT, CONV_ASK=trade["entry_A"], STOP=STOP,
             KNOWN_RATIO=KNOWN_RATIO, RISK_PERC=RISK_PERC)
         profit = calculator.profit_loss(
-            ENTRY=tr["entry_A"], EXIT=tr["exit_B"], POS_SIZE=size,
-            CONV_ASK=tr["entry_A"], CNT=0)
+            ENTRY=trade["entry_A"], EXIT=trade["exit_B"], POS_SIZE=size,
+            CONV_ASK=trade["entry_A"], CNT=0)
         AMOUNT += profit
-        d_pos_size[tr["entry"]] = {"POS_SIZE": size, "P/L AUD": profit,
-                                   "P/L REALISED": AMOUNT}
+        d_pos_size[trade["entry"]] = {"POS_SIZE": size, "P/L AUD": profit,
+                                      "P/L REALISED": AMOUNT}
     counting = pd.DataFrame.from_dict(d_pos_size, orient="index")
-    entry_exit_complete = entry_exit_sort.merge(
+    entry_exit_complete = trades.merge(
         counting, how="left", left_on="entry", right_index=True,
         validate="1:1")
 
-    return month_clean, sma_16_96, entry_exit_complete
+    return entry_exit_complete
+
+
+def main():
+
+    pd.set_option("display.max_columns", 12)
+    pd.set_option("display.max_rows", 500)
+    func = oanda.Candles.to_df
+    instrument = "AUD_JPY"
+    queryParameters = {
+        "from": "2019-01-01 17:00:00", "to": "2019-06-27 17:00:00",
+        "granularity": "M15", "price": "M"}
+
+    data_mid = setup(
+        func=func, instrument=instrument, queryParameters=queryParameters)
+    queryParameters["price"] = "A"
+    data_ask = setup(
+        func=func, instrument=instrument, queryParameters=queryParameters)
+    queryParameters["price"] = "B"
+    data_bid = setup(
+        func=func, instrument=instrument, queryParameters=queryParameters)
+
+    periods = [5, 6, 7, 8, 10, 12, 14, 15, 16, 20, 24, 25, 28, 30, 32, 35, 40,
+               45, 48, 50, 56, 64, 96, 100]
+    avgs = []
+    for i in periods:
+        avg = indicator.smooth_moving_average(
+            data_mid, column="close", period=i)
+        avgs.append(avg)
+    sma_x_y = pd.concat(avgs, axis=1)
+
+    s = [("close_sma_{}".format(i), "close_sma_{}".format(j))
+         for i in periods for j in periods if i < j]
+    d_results = {}
+    s_results = []
+    for i in iter(s):
+        print("\nSystem: {0} {1}\n".format(i[0], i[1]))
+        entry_exit_sort = signal(data_ask, data_bid, sma_x_y, i)
+        d_results[i] = count(entry_exit_sort)
+        print(d_results[i].tail())
+        kpi = pd.DataFrame.from_dict(
+            {"{0}_{1}".format(i[0], i[1]):
+             calculator.performance_stats(d_results[i])}, orient="index")
+        print("\n{}".format(kpi))
+        s_results.append(kpi)
+
+    results_frame = pd.concat(s_results, axis=0)
+    print("\n{}".format(results_frame))
+    return data_mid, sma_x_y, d_results, results_frame
 
 
 if __name__ == "__main__":
-    month_clean, sma_16_96, entry_exit = main()
+    data_mid, sma_x_y, total_results, stats_results = main()
+    stats_results.to_csv("stats_out.csv")
 
 # ["AUD_CAD", "NZD_USD", "NZD_JPY", "AUD_JPY", "AUD_NZD",
 # "AUD_USD", "USD_JPY", "USD_CHF", "GBP_CHF", "NZD_CAD", "CAD_JPY",

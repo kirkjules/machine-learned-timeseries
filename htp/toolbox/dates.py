@@ -1,3 +1,17 @@
+"""The module provides a series of generators that yield lists of dates
+according to their respective implemented logics.
+
+The following time ranges are defined as class methods: 1y, 1yTD, FY, FYTD, 6m,
+3m, FQ, FQTD, 5d, 1wTD, 1d, 1dTT, align to America/New_York timezone.
+
+Notes
+-----
+As this module was initially designed to facilitate querying the Oanda exchange
+which is located in New York, all time ranges will align with 1700h
+America/New-York timezone. This does not change with DST as the exchange
+operates on local business hours.
+"""
+
 import pytz
 import logging
 import calendar
@@ -6,36 +20,57 @@ from datetime import datetime, timedelta
 
 log = logging.getLogger(__name__)
 
-"""
-Define preset time range as class methods: 1y, 1yTD, FY, FYTD, 6m, 3m, FQ,
-        FQTD, 5d, 1wTD, 1d, 1dTT, align to America/New_York timezone.
-        Note: Since the exchange is located in New York, all time ranges
-        will align with 1700h America/New-York timezone. This does not
-        change with DST as the exchange operates on local business hours.
-
-Flow
-1. State date/time range with datetime strings listed in ISO-8601 format.
-2. Convert date/time to UTC.
-Note: Parse to query in RFC3339 format, e.g. “YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ”
-3. State granularity
-Note: daily candles should keep default setting for dailyAlignment and
-        alignmentTimezone settings. Smooth must be set to True to ensure
-        same values as displayed by Oanda on the online portal.
-4. Query data.
-Note: any actions logged will be in UTC time. If the user needs a timestamp
-        displayed in local time this functionality will be applied in the
-        relevant functions and methods.
-"""
-
 
 class Conversion:
 
     def __init__(self, date, local_tz=None, conv_tz=None):
         """
-        To convert any local time to UTC and back.
-        :param date: provided in string format %Y-%m-%d %H:%M:%S.
-        :param local_tz: timzone to localise given datetime with.
-        :param conv_tz: target timezone to convert datetime to.
+        To convert a given date-time to UTC and specified timezones.
+
+        Parameters
+        ----------
+        date : str
+            Provided in string format %Y-%m-%d %H:%M:%S.
+
+        local_tz : str, optional
+            Timzone to localise given datetime with. Must match a timezone
+            contained in `pytz.common_timezones` database. (The default is
+            None, which implies the system timezone should be used to make
+            the given date timezone aware.)
+
+        conv_tz : str, optional
+            Target timezone to convert datetime to. Must match a timezone
+            contained in `pytz.common_timezones` database. (The default is
+            None, which implies the date does not need to be converted.)
+
+        Attributes
+        ----------
+        tz_date : datetime.datetime
+            A timezone aware datetime object against.
+
+        utc_date : datetime.datetime
+            The given timezone aware date converted to UTC timezone. Note if no
+            local timezone is provided, or none can be inferred from the
+            system, the date will be assumed to be in UTC. Thus tz_date will
+            equal tz_date.
+
+        conv_date : datetime.datetime or None
+            The given date converted from the given local timezone, or UTC, to
+            a given target timezone. If no target timezome (conv_tz) is
+            provided then conv_date will be None.
+
+        Examples
+        --------
+        >>> d = Conversion("2018-05-06 18:54:13", local_tz="Australia/Sydney",
+        ...                conv_tz="America/New_York")
+        >>> d.tz_date
+        datetime.datetime(2018, 5, 6, 18, 54, 13, tzinfo=<DstTzInfo \
+'Australia/Sydney' AEST+10:00:00 STD>)
+        >>> d.utc_date
+        datetime.datetime(2018, 5, 6, 8, 54, 13, tzinfo=<UTC>)
+        >>> d.conv_date
+        datetime.datetime(2018, 5, 6, 4, 54, 13, tzinfo=<DstTzInfo \
+'America/New_York' EDT-1 day, 20:00:00 DST>)
         """
         try:
             obj = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
@@ -71,6 +106,9 @@ class Conversion:
 class Select:
     """
     Generates datetime variable lists from predefined business logic.
+
+    Notes
+    -----
     Limitations:
         1. The Oanda API has a 5000 max session-per-query limit.
         Functionality has not been written to handle this error. This will
@@ -85,10 +123,49 @@ class Select:
         """
         Initialise datestring arguments into UTC time using the Conversion()
         class.
-        If no arguments are provided all methods will use datetime.now().
-        All times are converted to UTC time.
-        :param local_tz: allows user to specify input datetime timezone.
-        Facilitates general use.
+
+        Parameters
+        ----------
+        from_ : str
+            Provided in string format %Y-%m-%d %H:%M:%S. The date from which
+            the generated time range should start.
+
+        to : str
+            Provided in string format %Y-%m-%d %H:%M:%S. The date from which
+            the generated time range should stop.
+
+        local_tz : str, optional
+            Timzone to localise given datetimes with. Must match a timezone
+            contained in `pytz.common_timezones` database. (The default is
+            None, which implies the system timezone should be used to make
+            the given dates timezone aware.)
+
+        Attributes
+        ----------
+        from_date : datetime.datetime
+            The given `from_` parameter converted to UTC time.
+
+        to_date : datetime.datetime
+            The given `to` parameter converted to UTC time.
+
+        date_range : int
+            The number of years between the `from_` and `to` dates.
+
+        Notes
+        -----
+        - If no arguments are provided all methods will use datetime.now().
+        - All times are converted to UTC time.
+
+        Examples
+        --------
+        >>> d = Select(from_="2018-05-06 18:54:13", to="2019-06-15 10:12:04",
+        ...            local_tz="Australia/Sydney")
+        >>> d.from_date
+        datetime.datetime(2018, 5, 6, 8, 54, 13, tzinfo=<UTC>)
+        >>> d.to_date
+        datetime.datetime(2019, 6, 15, 0, 12, 4, tzinfo=<UTC>)
+        >>> d.date_range
+        2
         """
         if from_ is not None:
             self.from_date = Conversion(from_, local_tz=local_tz).utc_date
