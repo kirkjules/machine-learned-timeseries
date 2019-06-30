@@ -365,7 +365,9 @@ def performance_stats(results):
         sum(list_cons_loss) / len(list_cons_loss)
         ).quantize(decimal.Decimal("1."))
 
-    stats["trading_exp"] = (stats["win_%"] * stats["win_mean"]) +\
-        (stats["loss_%"] * stats["loss_mean"])
+    stats["trading_exp"] = (
+        (stats["win_%"] / decimal.Decimal("100") * stats["win_mean"]) +
+        (stats["loss_%"] / decimal.Decimal("100") * stats["loss_mean"])
+        ).quantize(decimal.Decimal("0.01"))
 
     return stats

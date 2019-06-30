@@ -1,7 +1,9 @@
 import copy
 import logging
 import pandas as pd
-# from pprint import pprint
+import multiprocessing
+from pprint import pprint
+from functools import partial
 from decimal import Decimal
 from htp.api import oanda
 from htp.toolbox import dates, engine, calculator
@@ -113,12 +115,12 @@ def signal(data_price_in, data_price_out, sig_frame, system):
     entry_exit_in = entry_exit.merge(
         data_price_in["open"].to_frame(), how="left", left_on="entry",
         right_index=True, validate="1:1").rename(
-            columns={"open": "entry_{}".format(data_price_in.name)})
+            columns={"open": "entry_A"})  # {}".format(data_price_in.name)})
 
     entry_exit_in_out = entry_exit_in.merge(
         data_price_out["open"].to_frame(), how="left", left_on="exit",
         right_index=True, validate="1:1").rename(
-            columns={"open": "exit_{}".format(data_price_out.name)})
+            columns={"open": "exit_B"})  # {}".format(data_price_out.name)})
 
     entry_exit_sort = entry_exit_in_out.sort_values(
         by=["entry"]).reset_index(drop=True)
@@ -171,6 +173,55 @@ def count(trades):
     return entry_exit_complete
 
 
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
+
+
+def assess(data_price_in, data_price_out, sig_frame, iterable):
+    s_results = []
+    for i in iter(iterable):
+        entry_exit_sort = signal(
+            data_price_in=data_price_in, data_price_out=data_price_out,
+            sig_frame=sig_frame, system=i)
+        d_results = count(entry_exit_sort)
+        kpi = pd.DataFrame.from_dict(
+            {"{0}_{1}".format(i[0], i[1]):
+             calculator.performance_stats(d_results)}, orient="index")
+        lock.acquire()
+        print("\nSystem: {0} {1}\n".format(i[0], i[1]))
+        print(d_results.tail())
+        print("\n{}".format(kpi))
+        lock.release()
+        s_results.append(kpi)
+    return s_results
+
+
+def init_lock(l_):
+    """
+    Lock initialiser used in the pool setup.
+    """
+    global lock
+    lock = l_
+
+
+def run(target, data_price_in, data_price_out, sig_frame, iterable):
+    l_ = multiprocessing.Lock()
+    pool = multiprocessing.Pool(processes=4,
+                                initializer=init_lock,
+                                initargs=(l_,))
+    func = partial(target, data_price_in, data_price_out, sig_frame)
+    results = []
+    for i in pool.map(func, iterable):
+        results.append(i)
+
+    pool.close()
+    pool.join()
+
+    return results
+
+
 def main():
 
     pd.set_option("display.max_columns", 12)
@@ -190,8 +241,8 @@ def main():
     data_bid = setup(
         func=func, instrument=instrument, queryParameters=queryParameters)
 
-    periods = [5, 6, 7, 8, 10, 12, 14, 15, 16, 20, 24, 25, 28, 30, 32, 35, 40,
-               45, 48, 50, 56, 64, 96, 100]
+    periods = [5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 18, 20, 24, 25, 28, 30, 32,
+               35, 36, 40, 45, 48, 50, 56, 64, 70, 72, 80, 90, 96, 100]
     avgs = []
     for i in periods:
         avg = indicator.smooth_moving_average(
@@ -201,27 +252,20 @@ def main():
 
     s = [("close_sma_{}".format(i), "close_sma_{}".format(j))
          for i in periods for j in periods if i < j]
-    d_results = {}
+    s_chunk = list(chunks(s, int(len(s) / 4)))
+    # pprint(s_chunk)
+    results = run(assess, data_ask, data_bid, sma_x_y, s_chunk)
     s_results = []
-    for i in iter(s):
-        print("\nSystem: {0} {1}\n".format(i[0], i[1]))
-        entry_exit_sort = signal(data_ask, data_bid, sma_x_y, i)
-        d_results[i] = count(entry_exit_sort)
-        print(d_results[i].tail())
-        kpi = pd.DataFrame.from_dict(
-            {"{0}_{1}".format(i[0], i[1]):
-             calculator.performance_stats(d_results[i])}, orient="index")
-        print("\n{}".format(kpi))
-        s_results.append(kpi)
-
+    for i in results:
+        s_results.append(pd.concat(i, axis=0))
     results_frame = pd.concat(s_results, axis=0)
     print("\n{}".format(results_frame))
-    return data_mid, sma_x_y, d_results, results_frame
+    # results_frame.to_csv("stats_out.csv")
+    return data_mid, sma_x_y, results_frame
 
 
 if __name__ == "__main__":
-    data_mid, sma_x_y, total_results, stats_results = main()
-    stats_results.to_csv("stats_out.csv")
+    data_mid, sma_x_y, stats_results = main()
 
 # ["AUD_CAD", "NZD_USD", "NZD_JPY", "AUD_JPY", "AUD_NZD",
 # "AUD_USD", "USD_JPY", "USD_CHF", "GBP_CHF", "NZD_CAD", "CAD_JPY",
