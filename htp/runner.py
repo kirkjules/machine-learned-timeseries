@@ -2,11 +2,11 @@ import copy
 import logging
 import pandas as pd
 import multiprocessing
-from pprint import pprint
+# from pprint import pprint
 from functools import partial
 from decimal import Decimal
 from htp.api import oanda
-from htp.toolbox import dates, engine, calculator
+from htp.toolbox import dates, engine, calculator, workshop
 from htp.analyse import indicator, evaluate
 
 f = "%(asctime)s - %(name)s - %(message)s"
@@ -179,23 +179,23 @@ def chunks(l, n):
         yield l[i:i + n]
 
 
-def assess(data_price_in, data_price_out, sig_frame, iterable):
-    s_results = []
-    for i in iter(iterable):
-        entry_exit_sort = signal(
-            data_price_in=data_price_in, data_price_out=data_price_out,
-            sig_frame=sig_frame, system=i)
-        d_results = count(entry_exit_sort)
-        kpi = pd.DataFrame.from_dict(
-            {"{0}_{1}".format(i[0], i[1]):
-             calculator.performance_stats(d_results)}, orient="index")
-        lock.acquire()
-        print("\nSystem: {0} {1}\n".format(i[0], i[1]))
-        print(d_results.tail())
-        print("\n{}".format(kpi))
-        lock.release()
-        s_results.append(kpi)
-    return s_results
+def assess(data_price_in, data_price_out, sig_frame, i=None):
+    # s_results = []
+    # for i in iter(iterable):
+    entry_exit_sort = signal(
+        data_price_in=data_price_in, data_price_out=data_price_out,
+        sig_frame=sig_frame, system=i)
+    d_results = count(entry_exit_sort)
+    kpi = pd.DataFrame.from_dict(
+        {"{0}_{1}".format(i[0], i[1]):
+         calculator.performance_stats(d_results)}, orient="index")
+    # lock.acquire()
+    print("\nSystem: {0} {1}\n".format(i[0], i[1]))
+    print(d_results.tail())
+    print("\n{}".format(kpi))
+    # lock.release()
+    # s_results.append(kpi)
+    return kpi  # s_results
 
 
 def init_lock(l_):
@@ -241,8 +241,9 @@ def main():
     data_bid = setup(
         func=func, instrument=instrument, queryParameters=queryParameters)
 
-    periods = [5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 18, 20, 24, 25, 28, 30, 32,
-               35, 36, 40, 45, 48, 50, 56, 64, 70, 72, 80, 90, 96, 100]
+    periods = [5, 6, 7]
+    # , 8, 9, 10, 12, 14, 15, 16, 18, 20, 24, 25, 28, 30, 32,
+    # 35, 36, 40, 45, 48, 50, 56, 64, 70, 72, 80, 90, 96, 100]
     avgs = []
     for i in periods:
         avg = indicator.smooth_moving_average(
@@ -252,13 +253,21 @@ def main():
 
     s = [("close_sma_{}".format(i), "close_sma_{}".format(j))
          for i in periods for j in periods if i < j]
-    s_chunk = list(chunks(s, int(len(s) / 4)))
+    # s_chunk = list(chunks(s, int(len(s) / 4)))
     # pprint(s_chunk)
-    results = run(assess, data_ask, data_bid, sma_x_y, s_chunk)
-    s_results = []
-    for i in results:
-        s_results.append(pd.concat(i, axis=0))
-    results_frame = pd.concat(s_results, axis=0)
+
+    results = workshop.Worker(
+        assess, "i", data_ask, data_bid, sma_x_y, iterable=s).seq()
+
+    # v1
+    # results = run(assess, data_ask, data_bid, sma_x_y, s_chunk)
+    # s_results = []
+    # for i in results:
+    #     s_results.append(pd.concat(i, axis=0))
+    # results_frame = pd.concat(s_results, axis=0)
+
+    # v2
+    results_frame = pd.concat(results, axis=0)
     print("\n{}".format(results_frame))
     # results_frame.to_csv("stats_out.csv")
     return data_mid, sma_x_y, results_frame
