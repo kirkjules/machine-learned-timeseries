@@ -140,9 +140,9 @@ class Candles(Api):
             log.info(exc)
             raise exc from None
         else:
-            self.status = self.r.status_code
+            status = self.r.status_code
 
-            if self.r.status_code != 200:
+            if status != 200:
                 raise exceptions.OandaError(
                   "The instrument.Candles endpoint has returned the following"
                   " error",

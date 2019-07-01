@@ -208,7 +208,7 @@ class ParallelWorker(Worker):
 
 if __name__ == "__main__":
     import time
-    from pprint import pprint
+    # from pprint import pprint
     from htp.api import oanda
     from htp.toolbox import dates
 
@@ -234,7 +234,7 @@ if __name__ == "__main__":
                queryParameters=queryParameters).run()
     # pprint(d)
     print("--- %s seconds ---" % (time.time() - start_time))
-
+    """
     start_time = time.time()
     print("ConcurrentWorker\n")
     d = ConcurrentWorker(d=d,
@@ -254,3 +254,4 @@ if __name__ == "__main__":
                    queryParameters=queryParameters).run()
     pprint(d)
     print("--- %s seconds ---" % (time.time() - start_time))
+    """
