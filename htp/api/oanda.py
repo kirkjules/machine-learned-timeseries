@@ -2,14 +2,12 @@
 The oanda module contains functions that interact with the Oanda V20 API
 endpoints, docummented at http://developer.oanda.com/rest-live-v20/introduction
 """
-# import logging
 import sys
 import requests
 import pandas as pd
 from loguru import logger
 from htp.api import Api, exceptions
 
-# log = logging.getLogger(__name__)
 logger.disable(__name__)
 
 
@@ -138,21 +136,16 @@ class Candles(Api):
                                   headers=self.headers,
                                   params=self.queryParameters)
         except requests.exceptions.RequestException as e:
-            exc = exceptions.ApiError("There has been an error connecting"
-                                      " with the api endpoint as raised by: "
-                                      " {}".format(e))
-            # log.info(exc)
-            logger.exception(exc)
-            raise exc from None
+            raise exceptions.ApiError(
+                "There has been an error connecting with the api endpoint as "
+                "raised by: {}".format(e)) from None
         else:
             status = self.r.status_code
 
             if status != 200:
                 raise exceptions.OandaError(
                   "The instrument.Candles endpoint has returned the following"
-                  " error",
-                  self.r.json(),
-                  status_code=self.r.status_code)
+                  " error", self.r.json(), status)
 
     @classmethod
     def to_json(cls, **kwargs):
@@ -212,7 +205,13 @@ class Candles(Api):
          'granularity': 'S5',
          'instrument': 'EUR_USD'}
         """
-        return cls(**kwargs).r.json()
+        try:
+            data = cls(**kwargs).r.json()
+        except (exceptions.ApiError, exceptions.OandaError) as e:
+            logger.exception(e)
+            return {"exc": e}
+        else:
+            return data
 
     @classmethod
     def to_df(cls, filename=None, **kwargs):
@@ -262,11 +261,9 @@ class Candles(Api):
 
         cols = {"o": "open", "h": "high", "l": "low", "c": "close"}
 
-        try:
-            resp = cls.to_json(**kwargs)
-        except (exceptions.ApiError, exceptions.OandaError) as e:
-            logger.exception(e)
-            return e
+        resp = cls.to_json(**kwargs)
+        if "exc" in resp:
+            return None
 
         price = "".join([i for i in ["mid", "bid", "ask"]
                          if i in resp["candles"][0].keys()])

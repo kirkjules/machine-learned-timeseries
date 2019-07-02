@@ -4,10 +4,6 @@ throughout the api library.
 
 """
 import yaml
-# import logging
-
-# Set default logging handler to avoid "No handler found" warnings.
-# logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 
 class Api:

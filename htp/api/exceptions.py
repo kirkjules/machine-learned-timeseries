@@ -9,7 +9,7 @@ class ApiError(Exception):
     class that inherits from ApiError.
     """
     def __init__(self, msg):
-        super().__init__(msg)  # references/keeps the inherited variables.
+        super().__init__(msg)  # references/keeps the inherited variables
         self.msg = msg
 
     def __str__(self):
@@ -23,11 +23,16 @@ class OandaError(ApiError):
     :param msg: Function appropriate message.
     :param oanda_msg: requests.json object containing the Oanda api response.
     """
-    def __init__(self, msg, oanda_msg, status_code):
+    def __init__(self, msg, oanda_msg=None, status=None):
         super().__init__(msg)
-        self.oanda_msg = oanda_msg["errorMessage"]
-        self.status_code = status_code
+        self.oanda_msg = oanda_msg
+        if oanda_msg is not None:
+            self.oanda_msg = oanda_msg["errorMessage"]
+        self.status_code = status
         self.message = "{}: {}".format(self.msg, self.oanda_msg)
 
     def __str__(self):
         return self.message
+
+    # def __reduce__(self):
+    #     return type(self), (msg, oanda_msg, status)

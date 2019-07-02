@@ -265,8 +265,9 @@ class ParallelWorker(Worker):
 
 if __name__ == "__main__":
     import os
-    # import sys
+    import sys
     import time
+    from loguru import logger
     from copy import deepcopy
     from pprint import pprint
     from htp.api.oanda import Candles
@@ -275,11 +276,16 @@ if __name__ == "__main__":
     # f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     # logging.basicConfig(level=logging.INFO, format=f)
 
+    logger.enable("htp.api.oanda")
+
     cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
     instrument = "AUD_JPY"
     func = Candles.to_json
     queryParameters = {"granularity": "D"}
-    date_gen = Select().by_month(period=5, no_days=[6], year_by_day=True)
+    # date_gen = Select().by_month(period=5, no_days=[6], year_by_day=True)
+    date_gen = Select(
+        from_="2019-03-04 21:00:00", to="2019-12-15 22:00:00",
+        local_tz="America/New_York").by_month()    
     date_list = []
     for i in date_gen:
         queryParameters["from"] = i["from"]
