@@ -198,30 +198,6 @@ def assess(data_price_in, data_price_out, sig_frame, i=None):
     return kpi  # s_results
 
 
-def init_lock(l_):
-    """
-    Lock initialiser used in the pool setup.
-    """
-    global lock
-    lock = l_
-
-
-def run(target, data_price_in, data_price_out, sig_frame, iterable):
-    l_ = multiprocessing.Lock()
-    pool = multiprocessing.Pool(processes=4,
-                                initializer=init_lock,
-                                initargs=(l_,))
-    func = partial(target, data_price_in, data_price_out, sig_frame)
-    results = []
-    for i in pool.map(func, iterable):
-        results.append(i)
-
-    pool.close()
-    pool.join()
-
-    return results
-
-
 def main():
 
     pd.set_option("display.max_columns", 12)
@@ -256,8 +232,8 @@ def main():
     # s_chunk = list(chunks(s, int(len(s) / 4)))
     # pprint(s_chunk)
 
-    results = workshop.Worker(
-        assess, "i", data_ask, data_bid, sma_x_y, iterable=s).seq()
+    results = workshop.ParallelWorker(
+        assess, "i", data_ask, data_bid, sma_x_y, iterable=s).prl()
 
     # v1
     # results = run(assess, data_ask, data_bid, sma_x_y, s_chunk)

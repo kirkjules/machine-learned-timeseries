@@ -4,10 +4,10 @@ throughout the api library.
 
 """
 import yaml
-import logging
+# import logging
 
 # Set default logging handler to avoid "No handler found" warnings.
-logging.getLogger(__name__).addHandler(logging.NullHandler())
+# logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 
 class Api:
@@ -60,7 +60,8 @@ class Api:
     >>> var = Api(configFile="config.yaml", api="oanda", access="practise")
     >>> pprint(var.details)
     {'account-id': '101-011-6215953-001',
-     'token': 'a4c4164e10bd1c4e5afb3038340c444f-a349aec867b5faed0113ed23c984193b',
+     'token': 'a4c4164e10bd1c4e5afb3038340c444f-'
+'a349aec867b5faed0113ed23c984193b',
      'url': 'https://api-fxpractice.oanda.com/v3/'}
 
     """

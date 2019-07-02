@@ -1,4 +1,4 @@
-import logging
+import loguru
 import multiprocessing
 from queue import Queue
 from functools import partial
@@ -250,9 +250,8 @@ class ParallelWorker(Worker):
             function working on a given value present in the iterable.
         """
         l_ = multiprocessing.Lock()
-        pool = multiprocessing.Pool(processes=4,
-                                    initializer=self._init_lock,
-                                    initargs=(l_,))
+        pool = multiprocessing.Pool(
+            processes=4, initializer=self._init_lock, initargs=(l_,))
         results = []
         for i in pool.map(partial(self._arg_kw, self.func, self.iterable_arg),
                           self.iterable):
@@ -273,8 +272,8 @@ if __name__ == "__main__":
     from htp.api.oanda import Candles
     from htp.toolbox.dates import Select
 
-    f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    logging.basicConfig(level=logging.INFO, format=f)
+    # f = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    # logging.basicConfig(level=logging.INFO, format=f)
 
     cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
     instrument = "AUD_JPY"

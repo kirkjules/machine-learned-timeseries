@@ -2,12 +2,15 @@
 The oanda module contains functions that interact with the Oanda V20 API
 endpoints, docummented at http://developer.oanda.com/rest-live-v20/introduction
 """
-import logging
+# import logging
+import sys
 import requests
 import pandas as pd
+from loguru import logger
 from htp.api import Api, exceptions
 
-log = logging.getLogger(__name__)
+# log = logging.getLogger(__name__)
+logger.disable(__name__)
 
 
 class Candles(Api):
@@ -91,7 +94,8 @@ class Candles(Api):
     >>> ticker = "EUR_USD"
     >>> arguments = {"from": "2019-06-27T17:00:00.000000000Z", "count": "3"}
     >>> cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
-    >>> data = Candles(configFile=cf, instrument=ticker, queryParameters=arguments)
+    >>> data = Candles(
+    ...     configFile=cf, instrument=ticker, queryParameters=arguments)
     >>> pprint(data.r.json())
     {'candles': [{'complete': True,
                   'mid': {'c': '1.13664',
@@ -137,7 +141,8 @@ class Candles(Api):
             exc = exceptions.ApiError("There has been an error connecting"
                                       " with the api endpoint as raised by: "
                                       " {}".format(e))
-            log.info(exc)
+            # log.info(exc)
+            logger.exception(exc)
             raise exc from None
         else:
             status = self.r.status_code
@@ -179,8 +184,10 @@ class Candles(Api):
         >>> from pprint import pprint
         >>> from htp.api.oanda import Candles
         >>> ticker = "EUR_USD"
-        >>> arguments = {"from": "2019-06-27T17:00:00.000000000Z", "count": "3"}
-        >>> pprint(Candles.to_json(instrument=ticker, queryParameters=arguments))
+        >>> arguments = {
+        ...     "from": "2019-06-27T17:00:00.000000000Z", "count": "3"}
+        >>> pprint(
+        ...     Candles.to_json(instrument=ticker, queryParameters=arguments))
         {'candles': [{'complete': True,
                       'mid': {'c': '1.13664',
                               'h': '1.13664',
@@ -242,7 +249,8 @@ class Candles(Api):
         >>> from pprint import pprint
         >>> from htp.api.oanda import Candles
         >>> ticker = "EUR_USD"
-        >>> arguments = {"from": "2019-06-27T17:00:00.000000000Z", "count": "3"}
+        >>> arguments = {
+        ...     "from": "2019-06-27T17:00:00.000000000Z", "count": "3"}
         >>> pprint(Candles.to_df(instrument=ticker, queryParameters=arguments))
                                 open     high      low    close
         2019-06-27 17:00:00  1.13662  1.13664  1.13662  1.13664
@@ -254,7 +262,12 @@ class Candles(Api):
 
         cols = {"o": "open", "h": "high", "l": "low", "c": "close"}
 
-        resp = cls.to_json(**kwargs)
+        try:
+            resp = cls.to_json(**kwargs)
+        except (exceptions.ApiError, exceptions.OandaError) as e:
+            logger.exception(e)
+            return e
+
         price = "".join([i for i in ["mid", "bid", "ask"]
                          if i in resp["candles"][0].keys()])
         for i in range(len(resp["candles"])):
@@ -274,11 +287,14 @@ class Candles(Api):
 
 if __name__ == "__main__":
     """
-    python htp/api/oanda.py "AUD_JPY" "2018-06-25T16:00:00.000000000Z" 50 "M15" out.csv
+    python htp/api/oanda.py "AUD_JPY" "2018-06-25T16:00:00.000000000Z" 50\
+            "M15" out.csv
     """
-    import sys
+    logger.enable("__main__")
+    logger.add(
+        sys.stdout, format="{time} - {level} - {message}", filter="__main__")
     ticker = sys.argv[1]
     queryParameters = {
         "from": sys.argv[2], "count": sys.argv[3], "granularity": sys.argv[4]}
-    Candles.to_df(
-        filename=sys.argv[5], instrument=ticker, queryParameters=queryParameters)
+    Candles.to_df(filename=sys.argv[5], instrument=ticker,
+                  queryParameters=queryParameters)
