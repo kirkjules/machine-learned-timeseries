@@ -68,6 +68,133 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
     return sma
 
 
+def ichimoku_kinko_hyo(data, conv=9, base=26, lead=52):
+    """
+    A function to calculate the ichimoku kinko hyo indicator set.
+
+    Parameters
+    ----------
+    data : pandas.core.frame.DataFrame
+        The dataframe that contains the timeseries open, high, low, close data
+        for a given ticker.
+
+    conv : int
+        The window range used to calculate the tenkan sen signal.
+
+    base : int
+        The window range used to calculate the kijun sen signal.
+
+    lead : int
+        The window range used to calculate the senkou B signal.
+
+    Returns
+    -------
+    pandas.core.frame.DataFrame
+        A dataframe with identical timeseries index to parsed `data`, with
+        columns respective to each signal that makes up the ichimoku kinko hyo
+        indicator set.
+
+    Notes
+    -----
+    Tenkan Sen: also know as the turning or conversion line. Calculated by
+    averaging the highest high and the lowest low for the past 9 periods.
+    Kijun Sen: also know as the standard or base line. Calculated by averaging
+    the highest high and lowest low for the past 26 periods.
+    Chikou Span: known as the lagging line. It is the given period's closing
+    price 26 periods behind.
+    Senkou Span: consists of two lines known as lead A and B. Lead A is
+    calculated by averaging the Tenkan Sen and the Kijun Sen and plotting 26
+    periods ahead. Lead B is calculated by averaging the highest high and
+    lowest low for the past 52 periods and plotting 26 periods ahead.
+    """
+
+    CH = data["high"].rolling(conv).max().to_frame(name="CH")
+    CL = data["low"].rolling(conv).min().to_frame(name="CL")
+
+    tenkan = CH.merge(
+        CL, left_index=True, right_index=True).mean(1).to_frame(name="tenkan")
+
+    BH = data["high"].rolling(base).max().to_frame(name="BH")
+    BL = data["low"].rolling(base).min().to_frame(name="BL")
+
+    kijun = BH.merge(
+        BL, left_index=True, right_index=True).mean(1).to_frame(name="kijun")
+
+    chikou = data["close"].shift(-26).to_frame(name="chikou")
+
+    senkou_A = tenkan.merge(
+        kijun, left_index=True, right_index=True).mean(
+            1).shift(26).to_frame(name="senkou_A")
+
+    H = data["high"].rolling(lead).max().to_frame()
+    L = data["low"].rolling(lead).min()
+    senkou_B = H.merge(
+        L, left_index=True, right_index=True).mean(
+            1).shift(26).to_frame(name="senkou_B")
+
+    return pd.concat([tenkan, kijun, chikou, senkou_A, senkou_B], axis=1)
+
+
+def relative_strength_index(data, window=14):
+    """
+    Function to calculate the relative strength index (RSI) of a given ticker's
+    timerseries data.
+
+    Parameters
+    ----------
+    data : pandas.core.frame.DataFrame
+        The dataframe that contains the timeseries open, high, low, close data
+        for a given ticker.
+
+    prd : int
+        The window range used to calculate the average gain and loss
+        respectively.
+
+    Returns
+    -------
+    pandas.core.frame.DataFrame
+        A dataframe that contains the final RSI for a given period, as well as
+        the calculated intermediary steps i.e. period-to-period price change,
+        average gain and loss respectively and RS.
+    """
+    close_ = pd.to_numeric(data["close"])
+    df = close_.diff().rename("Chg")
+    sp = pd.concat([close_, df], axis=1)
+    sp["Adv"] = sp["Chg"].mask(sp["Chg"] < 0, 0)
+    sp["Decl"] = sp["Chg"].mask(sp["Chg"] > 0, 0).abs()
+    sp["AvgGain"] = sp["Adv"].rolling(window).mean()
+    sp["AvgLoss"] = sp["Decl"].rolling(window).mean()
+
+    rd = {}
+    cnt = 0
+    gain = 0
+    loss = 0
+    for row in sp.iterrows():
+        if cnt == 14:
+            avg_gain = row[1]["AvgGain"]
+            avg_loss = row[1]["AvgLoss"]
+            rd[row[0]] = {"avg_gain": avg_gain, "avg_loss": avg_loss,
+                          "RS": (avg_gain / avg_loss)}
+            gain = avg_gain
+            loss = avg_loss
+            cnt += 14
+        elif cnt > 14:
+            avg_gain = ((gain * 13) + row[1]["Adv"]) / 14
+            avg_loss = ((loss * 13) + row[1]["Decl"]) / 14
+            rd[row[0]] = {"avg_gain": avg_gain, "avg_loss": avg_loss,
+                          "RS": (avg_gain / avg_loss)}
+            gain = avg_gain
+            loss = avg_loss
+            cnt += 1
+        else:
+            cnt += 1
+
+    rd_df = pd.DataFrame.from_dict(rd, orient="index")
+    rd_df["RSI"] = rd_df.apply(lambda x: 100 - (100 / (1 + x["RS"])), axis=1)
+
+    return rd_df
+
+
 if __name__ == "__main__":
     """
     python htp/analyse/indicator.py data/AUD_JPYH120180403-c100.csv close 3 6

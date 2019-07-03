@@ -209,7 +209,9 @@ class Candles(Api):
             data = cls(**kwargs).r.json()
         except (exceptions.ApiError, exceptions.OandaError) as e:
             logger.exception(e)
-            return {"exc": e}
+            key = (kwargs["queryParameters"]["from"],
+                   kwargs["queryParameters"]["to"])
+            return {key: e}
         else:
             return data
 

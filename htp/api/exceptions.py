@@ -33,6 +33,3 @@ class OandaError(ApiError):
 
     def __str__(self):
         return self.message
-
-    # def __reduce__(self):
-    #     return type(self), (msg, oanda_msg, status)
