@@ -51,11 +51,11 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
     >>> pd.set_option("display.max_columns", 6)
     >>> pd.concat(avgs, axis=1).tail()
                          close_sma_3  close_sma_6  close_sma_12  close_sma_24
-    2018-11-05 22:00:00    81.749667    81.116833     80.314333     80.151417
-    2018-11-06 22:00:00    82.134333    81.490667     80.538583     80.232458
-    2018-11-07 22:00:00    82.518333    81.971667     80.796417     80.340250
-    2018-11-08 22:00:00    82.530667    82.140167     81.043000     80.427208
-    2018-11-11 22:00:00    82.227000    82.180667     81.218333     80.487708
+    2018-11-05 22:00:00       81.750       81.117        80.314        80.151
+    2018-11-06 22:00:00       82.134       81.491        80.539        80.232
+    2018-11-07 22:00:00       82.518       81.972        80.796        80.340
+    2018-11-08 22:00:00       82.531       82.140        81.043        80.427
+    2018-11-11 22:00:00       82.227       82.181        81.218        80.488
     """
     rn = abs(Decimal(str(df1.iloc[0, 3])).as_tuple().exponent)
     sma = df1[column].rolling(period).mean().round(rn).rename(
@@ -96,15 +96,15 @@ def ichimoku_kinko_hyo(data, conv=9, base=26, lead=52):
 
     Notes
     -----
-    Tenkan Sen: also know as the turning or conversion line. Calculated by
+    - Tenkan Sen: also know as the turning or conversion line. Calculated by \
     averaging the highest high and the lowest low for the past 9 periods.
-    Kijun Sen: also know as the standard or base line. Calculated by averaging
-    the highest high and lowest low for the past 26 periods.
-    Chikou Span: known as the lagging line. It is the given period's closing
-    price 26 periods behind.
-    Senkou Span: consists of two lines known as lead A and B. Lead A is
-    calculated by averaging the Tenkan Sen and the Kijun Sen and plotting 26
-    periods ahead. Lead B is calculated by averaging the highest high and
+    - Kijun Sen: also know as the standard or base line. Calculated by \
+    averaging the highest high and lowest low for the past 26 periods.
+    - Chikou Span: known as the lagging line. It is the given period's \
+    closing price 26 periods behind.
+    - Senkou Span: consists of two lines known as lead A and B. Lead A is \
+    calculated by averaging the Tenkan Sen and the Kijun Sen and plotting 26 \
+    periods ahead. Lead B is calculated by averaging the highest high and \
     lowest low for the past 52 periods and plotting 26 periods ahead.
     """
 
@@ -135,7 +135,7 @@ def ichimoku_kinko_hyo(data, conv=9, base=26, lead=52):
     return pd.concat([tenkan, kijun, chikou, senkou_A, senkou_B], axis=1)
 
 
-def relative_strength_index(data, window=14):
+def relative_strength_index(data, period=14):
     """
     Function to calculate the relative strength index (RSI) of a given ticker's
     timerseries data.
@@ -146,7 +146,7 @@ def relative_strength_index(data, window=14):
         The dataframe that contains the timeseries open, high, low, close data
         for a given ticker.
 
-    prd : int
+    period : int
         The window range used to calculate the average gain and loss
         respectively.
 
@@ -156,43 +156,131 @@ def relative_strength_index(data, window=14):
         A dataframe that contains the final RSI for a given period, as well as
         the calculated intermediary steps i.e. period-to-period price change,
         average gain and loss respectively and RS.
+
+    Notes
+    -----
+    - Momentum indicator that measures the magnitude or velocity of recent \
+    price changes.
+    - I.e. RSI was designed to measure the speed of price movement.
+    - Evaluates overbought (>70) and oversold (<30) conditions.
+    - Rises as the number and size of positive closes increases, conversely \
+    lowers as the number and size of losses increases.
+    - Indicator can remain "overbought" or "oversold" will ticker present in \
+    an up- or downtrend respectively.
+
+    References
+    ----------
+    - https://www.investopedia.com/terms/r/rsi.asp
+    - https://www.babypips.com/learn/forex/relative-strength-index
+
+    Examples
+    --------
+    >>> from htp.api.oanda import Candles
+    >>> data = Candles.to_df(
+    ...     instrument="AUD_JPY",
+    ...     queryParameters={"granularity": "H1",
+    ...                      "from": "2018-06-11T16:00:00.000000000Z",
+    ...                      "count": 2000})
+    >>> relative_strength_index(data).tail()
+                         avg_gain  avg_loss        RS        RSI
+    2018-10-04 19:00:00  0.017276  0.046083  0.374887  27.266741
+    2018-10-04 20:00:00  0.022042  0.042791  0.515103  33.997907
+    2018-10-04 21:00:00  0.020467  0.043734  0.467992  31.879716
+    2018-10-04 22:00:00  0.021434  0.040611  0.527793  34.546108
+    2018-10-04 23:00:00  0.021617  0.037710  0.573253  36.437432
     """
     close_ = pd.to_numeric(data["close"])
     df = close_.diff().rename("Chg")
-    sp = pd.concat([close_, df], axis=1)
-    sp["Adv"] = sp["Chg"].mask(sp["Chg"] < 0, 0)
-    sp["Decl"] = sp["Chg"].mask(sp["Chg"] > 0, 0).abs()
-    sp["AvgGain"] = sp["Adv"].rolling(window).mean()
-    sp["AvgLoss"] = sp["Decl"].rolling(window).mean()
 
-    rd = {}
+    s = pd.concat([close_, df], axis=1)
+    s["Adv"] = s["Chg"].mask(s["Chg"] < 0, 0)
+    s["Decl"] = s["Chg"].mask(s["Chg"] > 0, 0).abs()
+    s["AvgGain"] = s["Adv"].rolling(period).mean()
+    s["AvgLoss"] = s["Decl"].rolling(period).mean()
+
+    r = {}
     cnt = 0
     gain = 0
     loss = 0
-    for row in sp.iterrows():
+    for row in s.iterrows():
         if cnt == 14:
             avg_gain = row[1]["AvgGain"]
             avg_loss = row[1]["AvgLoss"]
-            rd[row[0]] = {"avg_gain": avg_gain, "avg_loss": avg_loss,
-                          "RS": (avg_gain / avg_loss)}
-            gain = avg_gain
-            loss = avg_loss
-            cnt += 14
+            r[row[0]] = {"avg_gain": avg_gain, "avg_loss": avg_loss,
+                         "RS": (avg_gain / avg_loss)}
         elif cnt > 14:
             avg_gain = ((gain * 13) + row[1]["Adv"]) / 14
             avg_loss = ((loss * 13) + row[1]["Decl"]) / 14
-            rd[row[0]] = {"avg_gain": avg_gain, "avg_loss": avg_loss,
-                          "RS": (avg_gain / avg_loss)}
-            gain = avg_gain
-            loss = avg_loss
-            cnt += 1
+            r[row[0]] = {"avg_gain": avg_gain, "avg_loss": avg_loss,
+                         "RS": (avg_gain / avg_loss)}
         else:
-            cnt += 1
+            avg_gain = 0
+            avg_loss = 0
+        gain = avg_gain
+        loss = avg_loss
+        cnt += 1
 
-    rd_df = pd.DataFrame.from_dict(rd, orient="index")
-    rd_df["RSI"] = rd_df.apply(lambda x: 100 - (100 / (1 + x["RS"])), axis=1)
+    rs = pd.DataFrame.from_dict(r, orient="index")
+    rs["RSI"] = rs.apply(lambda x: 100 - (100 / (1 + x["RS"])), axis=1)
 
-    return rd_df
+    return rs
+
+
+def stochastic(data, period=14):
+    """
+    Function to calculate the stochastic oscillator of a given ticker's
+    timerseries data.
+
+    Parameters
+    ----------
+    data : pandas.core.frame.DataFrame
+        The dataframe that contains the timeseries open, high, low, close data
+        for a given ticker.
+
+    period : int
+        The window range used to %K value.
+
+    Returns
+    -------
+    pandas.core.frame.DataFrame
+        A dataframe that contains the %K and %D values that make up the
+        stochastic oscillator.
+
+    Notes
+    -----
+    - Momentum indicator that compares a given closing price to a range of \
+    prices over stated time period.
+    - Generates overbought (>80) and oversold (<20) signals by using a 0-100 \
+    value range.
+    - Theory predicates on the assumption that closing prices should close \
+    near the same direction as the current trend.
+    - Stochastic therefore works best in consistent trading ranges.
+
+    Examples
+    --------
+    >>> from htp.api.oanda import Candles
+    >>> data = Candles.to_df(
+    ...     instrument="AUD_JPY",
+    ...     queryParameters={"granularity": "H1",
+    ...                      "from": "2018-06-11T16:00:00.000000000Z",
+    ...                      "count": 2000})
+    >>> stochastic(data).tail()
+                          close    minN    maxN       %K       %D
+    2018-10-04 19:00:00  80.562  80.381  81.088  25.6011  21.0681
+    2018-10-04 20:00:00  80.646  80.381  81.056  39.2593  29.6824
+    2018-10-04 21:00:00  80.590  80.381  81.028  32.3029  32.3878
+    2018-10-04 22:00:00  80.624  80.381  81.028  37.5580  36.3734
+    2018-10-04 23:00:00  80.648  80.381  81.028  41.2674  37.0428
+    """
+    minN = data["low"].rolling(period).min().rename("minN")
+    maxN = data["high"].rolling(period).max().rename("maxN")
+    s = pd.concat([pd.to_numeric(data["close"]), minN, maxN], axis=1)
+    s["%K"] = s.apply(
+        lambda x: 100 * (x["close"] - x["minN"]) / (x["maxN"] - x["minN"]),
+        axis=1)
+    s["%D"] = s["%K"].rolling(3).mean()
+
+    return s.round(4)
 
 
 if __name__ == "__main__":

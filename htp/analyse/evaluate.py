@@ -1,5 +1,4 @@
 """Module used to evaluate trade signals generated from analysis."""
-import numpy as np
 import pandas as pd
 
 
@@ -62,29 +61,24 @@ def signal_cross(df, fast, slow, trade="buy"):
     pandas.core.frame.DataFrame
         A pandas dataframe that will contain two columns containing the entry
         and exit timestamps respectively for a trade.
-    
+
     Examples
     --------
     >>> import pandas as pd
-    >>> from pprint import pprint
     >>> from htp.api import oanda
     >>> from htp.analyse import indicator, evaluate
-    >>> ticker = "AUD_JPY"
     >>> arguments = {"from": "2018-02-05T22:00:00.000000000Z",
-                     "granularity": "D",
-                     "smooth": True,
-                     "count": 50}
-    >>> data = oanda.Candles.to_df(instrument=ticker,
-                                   queryParameters=arguments)
+    ...              "granularity": "D", "smooth": True, "count": 50}
+    >>> data = oanda.Candles.to_df(
+    ...     instrument="AUD_JPY", queryParameters=arguments)
     >>> data_index_dt = data.set_index(
-            pd.to_datetime(data.index,
-                           format="%Y-%m-%dT%H:%M:%S.%f000Z"), drop=True)
+    ...     pd.to_datetime(data.index,
+    ...                    format="%Y-%m-%dT%H:%M:%S.%f000Z"), drop=True)
     >>> data_sorted = data_index_dt.sort_index()
-    >>> sma_5 = indicator.smooth_moving_average(data_sorted, column="close",
-                                                period=5)
-    >>> sma_5_10 = indicator.smooth_moving_average(data_sorted, column="close",
-                                                   df2=sma_5, concat=True,
-                                                   period=10)
+    >>> sma_5 = indicator.smooth_moving_average(
+    ...     data_sorted, column="close", period=5)
+    >>> sma_5_10 = indicator.smooth_moving_average(
+    ...     data_sorted, column="close", df2=sma_5, concat=True, period=10)
     >>> evaluate.signal_cross(sma_5_10, "close_sma_5", "close_sma_10")
                     entry                exit
     0 2018-03-11 21:00:00 2018-03-19 21:00:00
