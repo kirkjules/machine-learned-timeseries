@@ -283,6 +283,71 @@ def stochastic(data, period=14):
     return s.round(4)
 
 
+def moving_average_convergence_divergence(data, fast=12, slow=26, signal=9):
+    """
+    Function to calculate the moving average convergence divergence for a given
+    ticker's timerseries data.
+
+    Parameters
+    ----------
+    data : pandas.core.frame.DataFrame
+        The dataframe that contains the timeseries open, high, low, close data
+        for a given ticker.
+
+    fast : int
+        The window range used to calculate the fast period exponential moving
+        average.
+
+    slow : int
+        The window range used to calculate the slow period exponential moving
+        average.
+
+    signal : int
+        The window range used to calculate the fast-slow difference moving
+        average.
+
+
+    Returns
+    -------
+    pandas.core.frame.DataFrame
+        A dataframe that contains the fast and slow exponential moving
+        averages, MACD, signal and histogram values that make up the moving
+        average convergence divergence indicator.
+
+    Notes
+    -----
+    - Used to identify moving averages that are indicating a new trend, \
+    whether bullish or bearish.
+
+    Examples
+    --------
+    >>> from htp.api.oanda import Candles
+    >>> data = Candles.to_df(
+    ...     instrument="AUD_JPY",
+    ...     queryParameters={"granularity": "H1",
+    ...                      "from": "2018-06-11T16:00:00.000000000Z",
+    ...                      "count": 2000})
+    >>> moving_average_convergence_divergence(data).tail()
+                            emaF     emaS    MACD  signal    hist
+    2018-10-04 19:00:00  80.6989  80.9230 -0.2241 -0.1965 -0.0276
+    2018-10-04 20:00:00  80.6907  80.9024 -0.2117 -0.2020 -0.0097
+    2018-10-04 21:00:00  80.6752  80.8793 -0.2041 -0.2071  0.0030
+    2018-10-04 22:00:00  80.6674  80.8604 -0.1930 -0.2105  0.0175
+    2018-10-04 23:00:00  80.6644  80.8447 -0.1803 -0.2101  0.0298
+    """
+
+    emaF = data["close"].ewm(
+        span=fast, min_periods=fast).mean().rename("emaF")
+    emaS = data["close"].ewm(
+        span=slow, min_periods=slow).mean().rename("emaS")
+    e = pd.concat([emaF, emaS], axis=1)
+    e["MACD"] = e["emaF"] - e["emaS"]
+    e["signal"] = e["MACD"].rolling(signal).mean()
+    e["hist"] = e["MACD"] - e["signal"]
+
+    return e.round(4)
+
+
 if __name__ == "__main__":
     """
     python htp/analyse/indicator.py data/AUD_JPYH120180403-c100.csv close 3 6
