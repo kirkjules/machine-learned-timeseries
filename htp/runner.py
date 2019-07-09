@@ -1,9 +1,9 @@
 import copy
 import logging
 import pandas as pd
-import multiprocessing
+# import multiprocessing
 # from pprint import pprint
-from functools import partial
+# # # from functools import partial
 from decimal import Decimal
 from htp.api import oanda
 from htp.toolbox import dates, engine, calculator, workshop
@@ -289,6 +289,24 @@ if __name__ == "__main__":
 #     - Columns: Entry Timestamp, Entry Price, Exit Timestamp, Exit Price,
 #       Position Size, Profit/Loss Pips, Profit/Loss AUD, Realized Profit/Loss
 #       AUD
+
+# Indicator and ML prep:
+# ----------------------
+# 1. Complete indicator suite.
+#    a) Base calculations on Investopedia and record the math in functions'
+# docstrings.
+#    b) Note/study the primary strategies for each respective indicator.
+# 2. Download and employ open source libraries TA-Lib and Tulip Indicators to
+# generate equivalent results on same datasets established indicator.py
+# docstrings.
+# 3. Design a framework to test indicator.py again open source standard as well
+# as manually
+# compare against TradingView and Oanda results/documentation.
+#    a) Employ pytest to define modules, classes and functions the will
+# comprise the framework.
+#    b) Record the statistical variations between different indicator methods.
+#    c) Conclude the appropriate next steps to employ to ensure that subsequent
+# ML analysis isn't compromised.
 
 # Apply model to dataset
 # :stop loss
