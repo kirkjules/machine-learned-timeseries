@@ -1,9 +1,6 @@
 import copy
 import logging
 import pandas as pd
-# import multiprocessing
-# from pprint import pprint
-# # # from functools import partial
 from decimal import Decimal
 from htp.api import oanda
 from htp.toolbox import dates, engine, calculator, workshop
@@ -115,12 +112,12 @@ def signal(data_price_in, data_price_out, sig_frame, system):
     entry_exit_in = entry_exit.merge(
         data_price_in["open"].to_frame(), how="left", left_on="entry",
         right_index=True, validate="1:1").rename(
-            columns={"open": "entry_A"})  # {}".format(data_price_in.name)})
+            columns={"open": "entry_A"})
 
     entry_exit_in_out = entry_exit_in.merge(
         data_price_out["open"].to_frame(), how="left", left_on="exit",
         right_index=True, validate="1:1").rename(
-            columns={"open": "exit_B"})  # {}".format(data_price_out.name)})
+            columns={"open": "exit_B"})
 
     entry_exit_sort = entry_exit_in_out.sort_values(
         by=["entry"]).reset_index(drop=True)
@@ -229,20 +226,10 @@ def main():
 
     s = [("close_sma_{}".format(i), "close_sma_{}".format(j))
          for i in periods for j in periods if i < j]
-    # s_chunk = list(chunks(s, int(len(s) / 4)))
-    # pprint(s_chunk)
 
     results = workshop.ParallelWorker(
         assess, "i", data_ask, data_bid, sma_x_y, iterable=s).prl()
 
-    # v1
-    # results = run(assess, data_ask, data_bid, sma_x_y, s_chunk)
-    # s_results = []
-    # for i in results:
-    #     s_results.append(pd.concat(i, axis=0))
-    # results_frame = pd.concat(s_results, axis=0)
-
-    # v2
     results_frame = pd.concat(results, axis=0)
     print("\n{}".format(results_frame))
     # results_frame.to_csv("stats_out.csv")
@@ -297,15 +284,14 @@ if __name__ == "__main__":
 # docstrings.
 #    b) Note/study the primary strategies for each respective indicator.
 # 2. Download and employ open source libraries TA-Lib and Tulip Indicators to
-# generate equivalent results on same datasets established indicator.py
+# generate equivalent results on same datasets established in indicator.py
 # docstrings.
-# 3. Design a framework to test indicator.py again open source standard as well
-# as manually
-# compare against TradingView and Oanda results/documentation.
+# 3. Design a framework to test indicator.py against open source standard as
+# well as manually compare against TradingView and Oanda results/documentation.
 #    a) Employ pytest to define modules, classes and functions the will
 # comprise the framework.
 #    b) Record the statistical variations between different indicator methods.
-#    c) Conclude the appropriate next steps to employ to ensure that subsequent
+#    c) Conclude the appropriate next steps required  to ensure that subsequent
 # ML analysis isn't compromised.
 
 # Apply model to dataset
