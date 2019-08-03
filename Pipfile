@@ -5,6 +5,7 @@ verify_ssl = true
 
 [dev-packages]
 htp = {editable = true,path = "."}
+pytest = "*"
 
 [packages]
 requests = "*"
