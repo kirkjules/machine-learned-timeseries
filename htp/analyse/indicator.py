@@ -57,8 +57,8 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
     2018-02-16 05:00:00       84.324       84.330        84.313        84.384
     """
     rn = abs(Decimal(str(df1.iloc[0, 3])).as_tuple().exponent)
-    sma = df1[column].rolling(period).mean().round(rn).rename(
-        "{}_sma_{}".format(column, period))
+    sma = df1[column].rolling(period).mean().round(rn).to_frame(
+        name="{}_sma_{}".format(column, period))
 
     if concat:
         out = pd.concat([sma, df2], axis=1)

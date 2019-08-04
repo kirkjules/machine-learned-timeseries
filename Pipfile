@@ -6,6 +6,8 @@ verify_ssl = true
 [dev-packages]
 htp = {editable = true,path = "."}
 pytest = "*"
+memory-profiler = "*"
+tulipy = "*"
 
 [packages]
 requests = "*"
@@ -16,7 +18,6 @@ pyyaml = "*"
 sphinx = "*"
 matplotlib = "*"
 ipython = "*"
-memory-profiler = "*"
 loguru = "*"
 
 [requires]
