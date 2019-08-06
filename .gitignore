@@ -5,6 +5,7 @@ workshop/
 *.swp
 *.DS_Store
 *.csv
+*.pdf
 
 # Compiled python modules.
 __pycache__/
