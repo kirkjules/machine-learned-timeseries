@@ -19,6 +19,8 @@ sphinx = "*"
 matplotlib = "*"
 ipython = "*"
 loguru = "*"
+scikit-learn = "*"
+graphviz = "*"
 
 [requires]
 python_version = "3.7"

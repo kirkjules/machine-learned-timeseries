@@ -221,7 +221,7 @@ def relative_strength_index(data, period=14):
     rs = pd.DataFrame.from_dict(r, orient="index")
     rs["RSI"] = rs.apply(lambda x: 100 - (100 / (1 + x["RS"])), axis=1)
 
-    return rs
+    return rs.round(3)
 
 
 def stochastic(data, period=14, smoothK=1, smoothD=3):
@@ -340,7 +340,7 @@ def moving_average_convergence_divergence(data, fast=12, slow=26, signal=9):
     to identify trend direction and duration.
     - Difference between moving averages makes up MACD line.
     - MACD exponential moving average gives the Signal line.
-    - The difference between these two lines gives a histogram that oscillates \
+    - The difference between these two lines gives a histogram that oscillates\
     above and below a centre Zero Line.
     - The histogram indicates on the timeseries' momentum.
     - Basic interpretation: when MACD is positive and the histogram is \

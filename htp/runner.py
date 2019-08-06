@@ -291,8 +291,17 @@ if __name__ == "__main__":
 #    a) Employ pytest to define modules, classes and functions the will
 # comprise the framework.
 #    b) Record the statistical variations between different indicator methods.
-#    c) Conclude the appropriate next steps required  to ensure that subsequent
+#    c) Conclude the appropriate next steps required to ensure that subsequent
 # ML analysis isn't compromised.
+
+# Machine Learning: Random Forest Classifer
+# -----------------------------------------
+# 1. Work through tutorial(s).
+# 2. Write script for ML process with n features.
+# 3. Apply script to indicator suite as is. Evaluate results.
+# 4. Enhance the feature suite to include relative indicator i.e. distance
+# between price and signal, indicator from different time frame, etc. Evaluate
+# result.
 
 # Apply model to dataset
 # :stop loss

@@ -1,8 +1,10 @@
 #.gitignore
+iris_decision_tree
 config.ini
 workshop/
 *.swp
 *.DS_Store
+*.csv
 
 # Compiled python modules.
 __pycache__/
