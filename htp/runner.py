@@ -188,8 +188,7 @@ def assess(data_price_in, data_price_out, sig_frame, i=None):
         {label: calculator.performance_stats(
             d_results[:500].copy())}, orient="index")
     print("\nSystem: {0} {1}\n".format(i[0], i[1]))
-    # print(d_results.tail())
-    print("\n{}".format(kpi))
+    print("\n{}\n".format(kpi))
     return (kpi, label, d_results, entry_exit_sort)
 
 
@@ -234,27 +233,44 @@ def main():
     atr = indicator.Momentum.average_true_range(data_mid)
 
     print("Difference Change")
-    data_mid["close_dif"] = data_mid["close"] - data_mid["close"].shift(1)
+    data_mid["close_diff"] = data_mid["close"] - data_mid["close"].shift(1)
     data_atr = pd.concat([data_mid, atr["ATR"]], axis=1)
-    data_atr["diff_atr"] = data_atr["close_dif"] / data_atr["ATR"]
+    data_atr["diff_atr"] = data_atr["close_diff"] / data_atr["ATR"]
     data_atr = data_atr.round(4)
 
     print("Concatenate Prep")
     data_temp = pd.concat([data_mid, iky_close["iky_cat"], rsi["RSI"],
-                           stoch[["%K", "%D", "stoch_diff"]],
+                           stoch[["%K", "%D", "stoch_diff"]], adx["ADX"],
                            macd[["MACD", "Signal", "Histogram"]],
-                           adx["ADX"], data_atr["diff_atr"]], axis=1)
+                           data_atr[["diff_atr", "ATR"]]], axis=1)
 
     # periods = [6, 7]  # [35, 50]
-    # periods = [5, 6, 7, 8, 9, 10, 12, 14, 
-    periods = [15, 16, 18, 20, 24, 25, 28, 30, 32, 35, 36, 40, 45, 48, 50, 56,
-               64, 70, 72, 80, 90, 96, 100]
+    # periods = [5, 6, 7, 8, 9, 10, 12, 14,
+    # periods = [15, 16, 18, 20, 24, 25, 28, 30, 32, 35, 36, 40, 45, 48, 50,
+    periods = [56, 64, 70, 72, 80, 90, 96, 100]
+
     avgs = []
     for i in periods:
         avg = indicator.smooth_moving_average(
             data_temp, column="close", period=i)
         avgs.append(avg)
     sma_x_y = pd.concat(avgs, axis=1)
+
+    print("Difference from Simple Moving Average curves")
+    data_sma_diff = pd.concat([data_temp[["close", "ATR"]], sma_x_y], axis=1)
+    for i in periods:
+        data_sma_diff["close_sma_{}_diff".format(i)] = \
+                data_sma_diff["close"] - \
+                data_sma_diff["close_sma_{}".format(i)]
+        data_sma_diff.drop("close_sma_{}".format(i), axis=1, inplace=True)
+        data_sma_diff["close_sma_{}_diff_atr".format(i)] = \
+                data_sma_diff["close_sma_{}_diff".format(i)] / \
+                data_sma_diff["ATR"]
+
+    # data_temp_final = pd.concat(
+    #     [data_temp, data_sma_diff.drop(["close", "ATR"], axis=1)], axis=1)
+
+    # print(data_temp_final.columns)
 
     s = [("close_sma_{}".format(i), "close_sma_{}".format(j))
          for i in periods for j in periods if i < j]
@@ -268,16 +284,14 @@ def main():
         r_frames.append(i[0])
         r_results[i[1]] = (i[2], i[3])  # [:550]
 
-    # entry_exit_data = results[0][3]
-
     results_frame = pd.concat(r_frames, axis=0)
-    print("\n{}".format(results_frame))
+    print("\n{}\n".format(results_frame))
     results_frame.to_csv("stats_out.csv")
-    return data_temp, results_frame, r_results
+    return data_temp, data_sma_diff.round(4), results_frame, r_results
 
 
 if __name__ == "__main__":
-    data_ind, stats_results, results = main()
+    data_ind, data_sma_diff, stats_results, results = main()
 
     stats_results_filter = stats_results[stats_results["win_%"] >= 40.0].copy()
     print(stats_results_filter.index)
@@ -286,8 +300,19 @@ if __name__ == "__main__":
         res_data = results[i][0]
         entry_data = results[i][1]
 
+        data_ind_sma = pd.concat(
+            [data_ind,
+             data_sma_diff[
+                 ["close_sma_{}_diff".format(i.split("_")[2]),
+                  "close_sma_{}_diff_atr".format(i.split("_")[2]),
+                  "close_sma_{}_diff".format(i.split("_")[5]),
+                  "close_sma_{}_diff_atr".format(i.split("_")[5])]
+             ]], axis=1)
+
+        print(data_ind_sma.columns)
+
         comp_win, base_line = predict.random_forest(
-            data_ind, res_data.copy())
+            data_ind_sma, res_data.copy())
 
         res_pred = comp_win.merge(entry_data, how="left", left_index=True,
                                   right_on="entry", validate="1:1")
@@ -296,16 +321,13 @@ if __name__ == "__main__":
                                    right_on="entry", validate="1:1")
 
         res_pred_count = count(res_pred)
-        # print(res_pred_count.tail())
-        print("# trades predicted: {}".format(len(res_pred_count)))
+        print("\n# trades predicted: {}\n".format(len(res_pred_count)))
 
         res_base_count = count(res_base)
-        # print(res_base_count.tail())
-        print("# trades base line: {}".format(len(res_base_count)))
+        print("\n# trades base line: {}\n".format(len(res_base_count)))
 
         res_pred_perf = calculator.performance_stats(res_pred_count)
         res_base_perf = calculator.performance_stats(res_base_count)
-        # pprint(res_pred_perf)
 
         kpi = pd.DataFrame.from_dict(
             {"Base Line": res_base_perf, "Prediction": res_pred_perf},
