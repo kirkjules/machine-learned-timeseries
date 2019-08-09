@@ -2,9 +2,10 @@ import copy
 import logging
 import pandas as pd
 from decimal import Decimal
+from pprint import pprint
 from htp.api import oanda
 from htp.toolbox import dates, engine, calculator, workshop
-from htp.analyse import indicator, evaluate
+from htp.analyse import indicator, evaluate, predict
 
 f = "%(asctime)s - %(name)s - %(message)s"
 # logging.basicConfig(level=logging.INFO, format=f)
@@ -71,7 +72,7 @@ def setup(func, instrument, queryParameters):
     data_clean = data_concat[~data_concat.index.duplicated()]
     data = data_clean.sort_index()
     data.name = "{}".format(queryParameters_copy["price"])
-    return data
+    return data.astype("float")
 
 
 def signal(data_price_in, data_price_out, sig_frame, system):
@@ -177,22 +178,19 @@ def chunks(l, n):
 
 
 def assess(data_price_in, data_price_out, sig_frame, i=None):
-    # s_results = []
-    # for i in iter(iterable):
+    label = "{0}_{1}".format(i[0], i[1])
     entry_exit_sort = signal(
         data_price_in=data_price_in, data_price_out=data_price_out,
         sig_frame=sig_frame, system=i)
     d_results = count(entry_exit_sort)
+    # Note comparing all systems by first 500 signals.
     kpi = pd.DataFrame.from_dict(
-        {"{0}_{1}".format(i[0], i[1]):
-         calculator.performance_stats(d_results)}, orient="index")
-    # lock.acquire()
+        {label: calculator.performance_stats(
+            d_results[:500].copy())}, orient="index")
     print("\nSystem: {0} {1}\n".format(i[0], i[1]))
-    print(d_results.tail())
+    # print(d_results.tail())
     print("\n{}".format(kpi))
-    # lock.release()
-    # s_results.append(kpi)
-    return kpi  # s_results
+    return (kpi, label, d_results, entry_exit_sort)
 
 
 def main():
@@ -202,7 +200,7 @@ def main():
     func = oanda.Candles.to_df
     instrument = "AUD_JPY"
     queryParameters = {
-        "from": "2019-01-01 17:00:00", "to": "2019-06-27 17:00:00",
+        "from": "2015-01-01 17:00:00", "to": "2018-06-27 17:00:00",
         "granularity": "M15", "price": "M"}
 
     data_mid = setup(
@@ -214,13 +212,47 @@ def main():
     data_bid = setup(
         func=func, instrument=instrument, queryParameters=queryParameters)
 
-    periods = [5, 6, 7]
-    # , 8, 9, 10, 12, 14, 15, 16, 18, 20, 24, 25, 28, 30, 32,
-    # 35, 36, 40, 45, 48, 50, 56, 64, 70, 72, 80, 90, 96, 100]
+    print("Ichimoku Kinko Hyo")
+    iky = indicator.ichimoku_kinko_hyo(data_mid)
+    iky_close = pd.concat([iky, data_mid["close"]], axis=1)
+    iky_close["iky_cat"] = iky_close.apply(evaluate.iky_cat, axis=1)
+
+    print("Relative Strength Index")
+    rsi = indicator.relative_strength_index(data_mid)
+
+    print("Stochastic")
+    stoch = indicator.stochastic(data_mid)
+    stoch["stoch_diff"] = stoch["%K"] - stoch["%D"]
+
+    print("Moving Average Convergence Divergence")
+    macd = indicator.moving_average_convergence_divergence(data_mid)
+
+    print("Average Directional Movement")
+    adx = indicator.Momentum.average_directional_movement(data_mid)
+
+    print("Average True Range")
+    atr = indicator.Momentum.average_true_range(data_mid)
+
+    print("Difference Change")
+    data_mid["close_dif"] = data_mid["close"] - data_mid["close"].shift(1)
+    data_atr = pd.concat([data_mid, atr["ATR"]], axis=1)
+    data_atr["diff_atr"] = data_atr["close_dif"] / data_atr["ATR"]
+    data_atr = data_atr.round(4)
+
+    print("Concatenate Prep")
+    data_temp = pd.concat([data_mid, iky_close["iky_cat"], rsi["RSI"],
+                           stoch[["%K", "%D", "stoch_diff"]],
+                           macd[["MACD", "Signal", "Histogram"]],
+                           adx["ADX"], data_atr["diff_atr"]], axis=1)
+
+    # periods = [6, 7]  # [35, 50]
+    # periods = [5, 6, 7, 8, 9, 10, 12, 14, 
+    periods = [15, 16, 18, 20, 24, 25, 28, 30, 32, 35, 36, 40, 45, 48, 50, 56,
+               64, 70, 72, 80, 90, 96, 100]
     avgs = []
     for i in periods:
         avg = indicator.smooth_moving_average(
-            data_mid, column="close", period=i)
+            data_temp, column="close", period=i)
         avgs.append(avg)
     sma_x_y = pd.concat(avgs, axis=1)
 
@@ -230,14 +262,56 @@ def main():
     results = workshop.ParallelWorker(
         assess, "i", data_ask, data_bid, sma_x_y, iterable=s).prl()
 
-    results_frame = pd.concat(results, axis=0)
+    r_frames = []
+    r_results = {}
+    for i in results:
+        r_frames.append(i[0])
+        r_results[i[1]] = (i[2], i[3])  # [:550]
+
+    # entry_exit_data = results[0][3]
+
+    results_frame = pd.concat(r_frames, axis=0)
     print("\n{}".format(results_frame))
-    # results_frame.to_csv("stats_out.csv")
-    return data_mid, sma_x_y, results_frame
+    results_frame.to_csv("stats_out.csv")
+    return data_temp, results_frame, r_results
 
 
 if __name__ == "__main__":
-    data_mid, sma_x_y, stats_results = main()
+    data_ind, stats_results, results = main()
+
+    stats_results_filter = stats_results[stats_results["win_%"] >= 40.0].copy()
+    print(stats_results_filter.index)
+    for i in stats_results_filter.index:
+        print("\nSystem: {}\n".format(i))
+        res_data = results[i][0]
+        entry_data = results[i][1]
+
+        comp_win, base_line = predict.random_forest(
+            data_ind, res_data.copy())
+
+        res_pred = comp_win.merge(entry_data, how="left", left_index=True,
+                                  right_on="entry", validate="1:1")
+
+        res_base = base_line.merge(entry_data, how="left", left_index=True,
+                                   right_on="entry", validate="1:1")
+
+        res_pred_count = count(res_pred)
+        # print(res_pred_count.tail())
+        print("# trades predicted: {}".format(len(res_pred_count)))
+
+        res_base_count = count(res_base)
+        # print(res_base_count.tail())
+        print("# trades base line: {}".format(len(res_base_count)))
+
+        res_pred_perf = calculator.performance_stats(res_pred_count)
+        res_base_perf = calculator.performance_stats(res_base_count)
+        # pprint(res_pred_perf)
+
+        kpi = pd.DataFrame.from_dict(
+            {"Base Line": res_base_perf, "Prediction": res_pred_perf},
+            orient="index")
+
+        pprint(kpi)
 
 # ["AUD_CAD", "NZD_USD", "NZD_JPY", "AUD_JPY", "AUD_NZD",
 # "AUD_USD", "USD_JPY", "USD_CHF", "GBP_CHF", "NZD_CAD", "CAD_JPY",

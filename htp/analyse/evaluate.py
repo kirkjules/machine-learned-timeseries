@@ -103,6 +103,16 @@ def signal_cross(df, fast, slow, trade="buy"):
     return entry_exit
 
 
+def iky_cat(row):
+    """
+    To categorise the order in which ichimoku signal lines present with respect
+    to each other.
+    """
+    ls = list(row.sort_values().index)
+    cat = "_".join(ls)
+    return cat
+
+
 if __name__ == "__main__":
     """
     python htp/analyse/evaluate.py data/sma_3_6.csv
