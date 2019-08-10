@@ -199,8 +199,8 @@ def main():
     func = oanda.Candles.to_df
     instrument = "AUD_JPY"
     queryParameters = {
-        "from": "2015-01-01 17:00:00", "to": "2018-06-27 17:00:00",
-        "granularity": "M15", "price": "M"}
+        "from": "2012-01-01 17:00:00", "to": "2018-06-27 17:00:00",
+        "granularity": "H1", "price": "M"}
 
     data_mid = setup(
         func=func, instrument=instrument, queryParameters=queryParameters)
@@ -244,10 +244,9 @@ def main():
                            macd[["MACD", "Signal", "Histogram"]],
                            data_atr[["diff_atr", "ATR"]]], axis=1)
 
-    # periods = [6, 7]  # [35, 50]
-    # periods = [5, 6, 7, 8, 9, 10, 12, 14,
-    # periods = [15, 16, 18, 20, 24, 25, 28, 30, 32, 35, 36, 40, 45, 48, 50,
-    periods = [56, 64, 70, 72, 80, 90, 96, 100]
+    # periods = [80, 96, 100]
+    periods = [5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 18, 20, 24, 25, 28, 30, 32,
+               35, 36, 40, 45, 48, 50, 56, 64, 70, 72, 80, 90, 96, 100]
 
     avgs = []
     for i in periods:
@@ -295,6 +294,7 @@ if __name__ == "__main__":
 
     stats_results_filter = stats_results[stats_results["win_%"] >= 40.0].copy()
     print(stats_results_filter.index)
+    res_rf = []
     for i in stats_results_filter.index:
         print("\nSystem: {}\n".format(i))
         res_data = results[i][0]
@@ -330,10 +330,17 @@ if __name__ == "__main__":
         res_base_perf = calculator.performance_stats(res_base_count)
 
         kpi = pd.DataFrame.from_dict(
-            {"Base Line": res_base_perf, "Prediction": res_pred_perf},
+            {"base_{0}_{1}".format(
+                i.split("_")[2], i.split("_")[5]): res_base_perf,
+             "prediction_{0}_{1}".format(
+                i.split("_")[2], i.split("_")[5]): res_pred_perf},
             orient="index")
 
         pprint(kpi)
+        res_rf.append(kpi)
+
+    df_res_rf = pd.concat(res_rf, axis=0)
+    df_res_rf.to_csv("rf_stats_out.csv")
 
 # ["AUD_CAD", "NZD_USD", "NZD_JPY", "AUD_JPY", "AUD_NZD",
 # "AUD_USD", "USD_JPY", "USD_CHF", "GBP_CHF", "NZD_CAD", "CAD_JPY",
