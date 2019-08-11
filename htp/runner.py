@@ -259,12 +259,12 @@ def main():
     data_sma_diff = pd.concat([data_temp[["close", "ATR"]], sma_x_y], axis=1)
     for i in periods:
         data_sma_diff["close_sma_{}_diff".format(i)] = \
-                data_sma_diff["close"] - \
-                data_sma_diff["close_sma_{}".format(i)]
+            data_sma_diff["close"] - \
+            data_sma_diff["close_sma_{}".format(i)]
         data_sma_diff.drop("close_sma_{}".format(i), axis=1, inplace=True)
         data_sma_diff["close_sma_{}_diff_atr".format(i)] = \
-                data_sma_diff["close_sma_{}_diff".format(i)] / \
-                data_sma_diff["ATR"]
+            data_sma_diff["close_sma_{}_diff".format(i)] / \
+            data_sma_diff["ATR"]
 
     # data_temp_final = pd.concat(
     #     [data_temp, data_sma_diff.drop(["close", "ATR"], axis=1)], axis=1)
@@ -314,20 +314,17 @@ if __name__ == "__main__":
         comp_win, base_line = predict.random_forest(
             data_ind_sma, res_data.copy())
 
-        res_pred = comp_win.merge(entry_data, how="left", left_index=True,
-                                  right_on="entry", validate="1:1")
-
         res_base = base_line.merge(entry_data, how="left", left_index=True,
                                    right_on="entry", validate="1:1")
-
-        res_pred_count = count(res_pred)
-        print("\n# trades predicted: {}\n".format(len(res_pred_count)))
-
         res_base_count = count(res_base)
         print("\n# trades base line: {}\n".format(len(res_base_count)))
-
-        res_pred_perf = calculator.performance_stats(res_pred_count)
         res_base_perf = calculator.performance_stats(res_base_count)
+
+        res_pred = comp_win.merge(entry_data, how="left", left_index=True,
+                                  right_on="entry", validate="1:1")
+        res_pred_count = count(res_pred)
+        print("\n# trades predicted: {}\n".format(len(res_pred_count)))
+        res_pred_perf = calculator.performance_stats(res_pred_count)
 
         kpi = pd.DataFrame.from_dict(
             {"base_{0}_{1}".format(
