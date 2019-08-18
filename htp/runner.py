@@ -1,20 +1,14 @@
+import sys
 import copy
-import logging
 import pandas as pd
+from loguru import logger
 from decimal import Decimal
 from pprint import pprint
 from htp.api import oanda
-from htp.toolbox import dates, engine, calculator, workshop
+from htp.toolbox import dates, calculator, workshop
 from htp.analyse import indicator, evaluate, predict
 
-f = "%(asctime)s - %(name)s - %(message)s"
-# logging.basicConfig(level=logging.INFO, format=f)
-logger = logging.getLogger("htp.toolbox.engine")
-logger.setLevel(level=logging.INFO)
-fh = logging.StreamHandler()
-fh_formatter = logging.Formatter(f)
-fh.setFormatter(fh_formatter)
-logger.addHandler(fh)
+logger.enable("htp.api.oanda")
 
 
 def setup(func, instrument, queryParameters):
@@ -54,20 +48,37 @@ def setup(func, instrument, queryParameters):
     Note: any actions logged will be in UTC time. If the user needs a timestamp
             displayed in local time this functionality will be applied in the
             relevant functions and methods.
+
+    Examples
+    --------
+    >>> func = oanda.Candles.to_df
+    >>> instrument = "AUD_JPY"
+    >>> queryParameters = {
+    ...    "from": "2012-01-01 17:00:00", "to": "2012-06-27 17:00:00",
+    ...    "granularity": "H1", "price": "M"}
+    >>> data_mid = setup(
+    ...    func=func, instrument=instrument, queryParameters=queryParameters)
+    >>> data_mid.head()
+                           open    high     low   close
+    2012-01-01 22:00:00  78.667  78.892  78.627  78.830
+    2012-01-01 23:00:00  78.824  78.879  78.751  78.768
+    2012-01-02 00:00:00  78.776  78.839  78.746  78.803
+    2012-01-02 01:00:00  78.807  78.865  78.746  78.790
+    2012-01-02 02:00:00  78.787  78.799  78.703  78.733
     """
 
     queryParameters_copy = copy.deepcopy(queryParameters)
-    queue_dates = dates.Select(
+    date_gen = dates.Select(
         from_=queryParameters_copy["from"], to=queryParameters_copy["to"],
         local_tz="America/New_York").by_month()
     date_list = []
-    for i in queue_dates:
-        date_list.append(i)
-    work = engine.ParallelWorker(date_gen=date_list,
-                                 func=func,
-                                 instrument=instrument,
-                                 queryParameters=queryParameters_copy)
-    data_query = work.run()
+    for i in date_gen:
+        queryParameters_copy["from"] = i["from"]
+        queryParameters_copy["to"] = i["to"]
+        date_list.append(copy.deepcopy(queryParameters_copy))
+    data_query = workshop.ParallelWorker(
+        func, "queryParameters", iterable=date_list, instrument=instrument
+        ).prl()
     data_concat = pd.concat(data_query)
     data_clean = data_concat[~data_concat.index.duplicated()]
     data = data_clean.sort_index()
@@ -194,12 +205,13 @@ def assess(data_price_in, data_price_out, sig_frame, i=None):
 
 def main():
 
+    # DATA --> object: data_temp
     pd.set_option("display.max_columns", 12)
     pd.set_option("display.max_rows", 500)
     func = oanda.Candles.to_df
     instrument = "AUD_JPY"
     queryParameters = {
-        "from": "2012-01-01 17:00:00", "to": "2018-06-27 17:00:00",
+        "from": "2012-01-01 17:00:00", "to": "2012-06-27 17:00:00",
         "granularity": "H1", "price": "M"}
 
     data_mid = setup(
@@ -211,6 +223,8 @@ def main():
     data_bid = setup(
         func=func, instrument=instrument, queryParameters=queryParameters)
 
+    sys.exit()
+    # PROPERTIES --> object: data_temp
     print("Ichimoku Kinko Hyo")
     iky = indicator.ichimoku_kinko_hyo(data_mid)
     iky_close = pd.concat([iky, data_mid["close"]], axis=1)
@@ -244,6 +258,7 @@ def main():
                            macd[["MACD", "Signal", "Histogram"]],
                            data_atr[["diff_atr", "ATR"]]], axis=1)
 
+    # SYSTEMS
     # periods = [80, 96, 100]
     periods = [5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 18, 20, 24, 25, 28, 30, 32,
                35, 36, 40, 45, 48, 50, 56, 64, 70, 72, 80, 90, 96, 100]
@@ -255,6 +270,7 @@ def main():
         avgs.append(avg)
     sma_x_y = pd.concat(avgs, axis=1)
 
+    # EXTRA PROPERTIES (DERIVED FROM SYSTEM) --> object: data_sma_diff
     print("Difference from Simple Moving Average curves")
     data_sma_diff = pd.concat([data_temp[["close", "ATR"]], sma_x_y], axis=1)
     for i in periods:
@@ -274,6 +290,9 @@ def main():
     s = [("close_sma_{}".format(i), "close_sma_{}".format(j))
          for i in periods for j in periods if i < j]
 
+    # SIGNALS (OUTPUT FROM SYSTEM) --> object: results
+    # RESULTS (CALCULATED FROM SIGNALS) --> objects: stats_results (aggregate),
+    # results (by system)
     results = workshop.ParallelWorker(
         assess, "i", data_ask, data_bid, sma_x_y, iterable=s).prl()
 

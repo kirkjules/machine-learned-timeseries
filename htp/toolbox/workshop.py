@@ -1,4 +1,3 @@
-import loguru
 import multiprocessing
 from queue import Queue
 from functools import partial
@@ -265,8 +264,8 @@ class ParallelWorker(Worker):
 
 if __name__ == "__main__":
     import os
-    import sys
     import time
+    import pandas as pd
     from loguru import logger
     from copy import deepcopy
     from pprint import pprint
@@ -280,12 +279,12 @@ if __name__ == "__main__":
 
     cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
     instrument = "AUD_JPY"
-    func = Candles.to_json
+    func = Candles.to_df
     queryParameters = {"granularity": "D"}
     # date_gen = Select().by_month(period=5, no_days=[6], year_by_day=True)
     date_gen = Select(
-        from_="2019-03-04 21:00:00", to="2019-12-15 22:00:00",
-        local_tz="America/New_York").by_month()    
+        from_="2019-03-04 21:00:00", to="2019-06-15 22:00:00",
+        local_tz="America/New_York").by_month()
     date_list = []
     for i in date_gen:
         queryParameters["from"] = i["from"]
@@ -296,7 +295,7 @@ if __name__ == "__main__":
     d = ParallelWorker(
         func, "queryParameters", iterable=date_list, configFile=cf,
         instrument=instrument).prl()
-    pprint(d)
+    pprint(pd.concat(d, axis=0))
     print("--- %s seconds ---" % (time.time() - start_time))
 
     """

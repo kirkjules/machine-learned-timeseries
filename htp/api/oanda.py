@@ -146,6 +146,19 @@ class Candles(Api):
                 raise exceptions.OandaError(
                   "The instrument.Candles endpoint has returned the following"
                   " error", self.r.json(), status)
+            else:
+                try:
+                    msg = "{0} - {1}".format(
+                        kwargs["queryParameters"]["from"],
+                        kwargs["queryParameters"]["to"]).replace(
+                            ".000000000Z", "")
+                except KeyError:
+                    msg = "{0} - {1}".format(
+                        kwargs["queryParameters"]["from"],
+                        kwargs["queryParameters"]["count"]).replace(
+                            ".000000000Z", "")
+                finally:
+                    logger.info(msg)
 
     @classmethod
     def to_json(cls, **kwargs):

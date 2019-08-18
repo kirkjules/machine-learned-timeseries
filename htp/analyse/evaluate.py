@@ -12,8 +12,10 @@ def entry_exit_combine(df, entry, exit):
     df : pandas.core.frame.DataFrame
         The dataframe that contains the trade signals with respective entry and
         exit columns.
+
     entry : str
         The label for the column containing entry timestamps.
+
     exit : str
         The label for the column containing exit timestamps.
 
@@ -28,6 +30,11 @@ def entry_exit_combine(df, entry, exit):
     ex_prep = df.exit[df[exit] == True].reset_index()
     ex = ex_prep.drop("exit", axis=1).rename(columns={"index": "exit"})
 
+    # Checking that first signal is not an "exit" which would result in a mis-
+    # alignment between entry and exit singals that will not correspond to the
+    # same trade.
+    # Note: see test script that qualifies the implied logic used to combine
+    # entry and exit signal.
     if ex.loc[0][0] < en.loc[0][0]:
         ex_clean = ex.drop([0], inplace=False)
         del ex
@@ -64,25 +71,24 @@ def signal_cross(df, fast, slow, trade="buy"):
 
     Examples
     --------
-    >>> import pandas as pd
-    >>> from htp.api import oanda
+    >>> from htp.api.oanda import Candles
     >>> from htp.analyse import indicator, evaluate
-    >>> arguments = {"from": "2018-02-05T22:00:00.000000000Z",
-    ...              "granularity": "D", "smooth": True, "count": 50}
-    >>> data = oanda.Candles.to_df(
-    ...     instrument="AUD_JPY", queryParameters=arguments)
-    >>> data_index_dt = data.set_index(
-    ...     pd.to_datetime(data.index,
-    ...                    format="%Y-%m-%dT%H:%M:%S.%f000Z"), drop=True)
-    >>> data_sorted = data_index_dt.sort_index()
+    >>> data_sorted = Candles.to_df(
+    ...     instrument="AUD_JPY",
+    ...     queryParameters={"granularity": "H1",
+    ...                      "from": "2018-06-11T16:00:00.000000000Z",
+    ...                      "count": 2000})
     >>> sma_5 = indicator.smooth_moving_average(
     ...     data_sorted, column="close", period=5)
     >>> sma_5_10 = indicator.smooth_moving_average(
     ...     data_sorted, column="close", df2=sma_5, concat=True, period=10)
-    >>> evaluate.signal_cross(sma_5_10, "close_sma_5", "close_sma_10")
+    >>> signal_cross(sma_5_10, "close_sma_5", "close_sma_10").head(5)
                     entry                exit
-    0 2018-03-11 21:00:00 2018-03-19 21:00:00
-    1 2018-04-01 21:00:00 2018-04-02 21:00:00
+    0 2018-06-12 02:00:00 2018-06-12 10:00:00
+    1 2018-06-13 03:00:00 2018-06-13 20:00:00
+    2 2018-06-14 15:00:00 2018-06-14 17:00:00
+    3 2018-06-15 06:00:00 2018-06-15 11:00:00
+    4 2018-06-18 08:00:00 2018-06-18 14:00:00    
     """
     if trade == "buy":
         system = "{} > {}".format(fast, slow)
