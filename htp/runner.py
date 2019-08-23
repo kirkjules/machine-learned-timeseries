@@ -118,6 +118,38 @@ def signal(data_price_in, data_price_out, sig_frame, system):
     for exit.
     For a sell trade, the bid price is used for entry and the ask price is used
     for exit.
+
+    Examples
+    --------
+    >>> from htp.api.oanda import Candles
+    >>> from htp.analyse import indicator, evaluate
+    >>> data_mid = Candles.to_df(
+    ...     instrument="AUD_JPY",
+    ...     queryParameters={"granularity": "H1",
+    ...                      "from": "2018-06-11T16:00:00.000000000Z",
+    ...                      "count": 2000})
+    >>> data_bid = Candles.to_df(
+    ...     instrument="AUD_JPY",
+    ...     queryParameters={"granularity": "H1", "price": "B",
+    ...                      "from": "2018-06-11T16:00:00.000000000Z",
+    ...                      "count": 2000})
+    >>> data_ask = Candles.to_df(
+    ...     instrument="AUD_JPY",
+    ...     queryParameters={"granularity": "H1", "price": "A",
+    ...                      "from": "2018-06-11T16:00:00.000000000Z",
+    ...                      "count": 2000})
+    >>> sma_5 = indicator.smooth_moving_average(
+    ...     data_mid, column="close", period=5)
+    >>> sma_5_10 = indicator.smooth_moving_average(
+    ...     data_mid, column="close", df2=sma_5, concat=True, period=10)
+    >>> signal(data_price_in=data_ask, data_price_out=data_bid,
+    ...     sig_frame=sma_5_10, system=("close_sma_5", "close_sma_10")).head(5)
+                    entry                exit entry_A  exit_B
+    0 2018-06-12 02:00:00 2018-06-12 10:00:00  83.987  83.833
+    1 2018-06-13 03:00:00 2018-06-13 20:00:00  83.671  83.545
+    2 2018-06-14 15:00:00 2018-06-14 17:00:00  83.149  82.869
+    3 2018-06-15 06:00:00 2018-06-15 11:00:00  82.780  82.632
+    4 2018-06-18 08:00:00 2018-06-18 14:00:00  82.158  82.124
     """
     entry_exit = evaluate.signal_cross(sig_frame, system[0], system[1])
 
