@@ -1,12 +1,19 @@
+import copy
 import pytest
 import pandas
-import numpy as np
+import loguru
 from htp import runner
 from htp.api import oanda
+from htp.analyse import indicator, evaluate
+
+loguru.logger.enable("htp.api.oanda")
 
 
 @pytest.fixture
-def dataset():
+def setup():
+    """
+    Fixture to establish initialise setup data.
+    """
     func = oanda.Candles.to_df
     instrument = "AUD_JPY"
     queryParameters = {
@@ -17,17 +24,36 @@ def dataset():
 
 
 @pytest.fixture
-def data_mid(dataset):
+def dataset(setup):
     """
-    Fixture to call and return ticker mid price data.
+    Fixture to call and return ticker price data.
     """
-    return runner.setup(
-        func=dataset["func"], instrument=dataset["instrument"],
-        queryParameters=dataset["queryParameters"])
+    data_mid = runner.setup(
+        func=setup["func"], instrument=setup["instrument"],
+        queryParameters=setup["queryParameters"])
+    qP_ask = copy.deepcopy(setup["queryParameters"])
+    qP_ask["price"] = "A"
+    data_ask = runner.setup(
+        func=setup["func"], instrument=setup["instrument"],
+        queryParameters=qP_ask)
+    qP_bid = copy.deepcopy(setup["queryParameters"])
+    qP_bid["price"] = "B"
+    data_bid = runner.setup(
+        func=setup["func"], instrument=setup["instrument"],
+        queryParameters=qP_bid)
+    data_prop = indicator.Momentum(data_mid)
+    sma_6 = indicator.smooth_moving_average(data_mid, period=6)
+    sma_6_24 = indicator.smooth_moving_average(data_mid, df2=sma_6, period=24,
+                                               concat=True)
+
+    return {"data_mid": data_mid, "data_ask": data_ask, "data_bid": data_bid,
+            "data_sys": sma_6_24, "data_prop": data_prop.atr}
 
 
-def test_fixtures(data_mid):
-    data = data_mid
-    print(data.head())
-    assert type(data) == pandas.core.frame.DataFrame
-
+def test_fixtures(dataset):
+    trade_data = evaluate.Signals.sys_signals(
+        dataset["data_mid"], dataset["data_ask"], dataset["data_bid"],
+        dataset["data_sys"], "close_sma_6", "close_sma_24", trade="buy",
+        diff_SL=-0.2)
+    print(trade_data)
+    assert type(trade_data) == pandas.core.frame.DataFrame
