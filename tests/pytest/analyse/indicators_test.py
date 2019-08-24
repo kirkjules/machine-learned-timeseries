@@ -68,7 +68,7 @@ def test_tulipy_rsi(local_setup, rsi):
     df = pandas.DataFrame({
         "Tulipy RSI": pandas.Series(ind, index=local_setup.index)}).round(3)
     assert len(arr) == len(df)
-    print(pandas.concat([rsi, df], axis=1).head(20))
+    # print(pandas.concat([rsi, df], axis=1).head(20))
     assert np.array_equal(
         df["Tulipy RSI"].to_numpy(copy=True).astype(float)[14:20],
         rsi["RSI"].to_numpy(copy=True).astype(float)[14:20])
