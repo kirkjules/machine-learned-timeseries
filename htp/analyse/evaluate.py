@@ -4,113 +4,6 @@ import numpy as np
 import pandas as pd
 
 
-def entry_exit_combine(df, entry, exit):
-    """
-    A function to combine entry and exit timestamps for trades generated via
-    signal cross logic.
-
-    Parameters
-    ----------
-    df : pandas.core.frame.DataFrame
-        The dataframe that contains the trade signals with respective entry and
-        exit columns.
-
-    entry : str
-        The label for the column containing entry timestamps.
-
-    exit : str
-        The label for the column containing exit timestamps.
-
-    Returns
-    -------
-    pandas.core.frame.DataFrame
-        Dataframe will contain two columns, designated "entry" and "exit"
-        respectively. Each row is one trade.
-    """
-    en_prep = df.entry[df[entry] == True].reset_index()
-    en = en_prep.drop("entry", axis=1).rename(columns={"index": "entry"})
-    ex_prep = df.exit[df[exit] == True].reset_index()
-    ex = ex_prep.drop("exit", axis=1).rename(columns={"index": "exit"})
-
-    # Checking that first signal is not an "exit" which would result in a mis-
-    # alignment between entry and exit singals that will not correspond to the
-    # same trade.
-    # Note: see test script that qualifies the implied logic used to combine
-    # entry and exit signal.
-    if ex.loc[0][0] < en.loc[0][0]:
-        ex_clean = ex.drop([0], inplace=False)
-        del ex
-        ex = ex_clean.reset_index(drop=True, inplace=False)
-
-    out = pd.concat([en, ex], axis=1)
-    trade = out[~out["exit"].isnull()]
-    return trade
-
-
-def signal_cross(df, fast, slow, trade="buy"):
-    """
-    A function to identify trades based off two signals crossing one another.
-
-    Parameters
-    ----------
-    df : pandas.core.frame.DataFrame
-        The dataframe that contains two signals in their respective columns.
-    fast : str
-        The column label that corresponds to the fast, more responsive, signal,
-        e.g. the smaller period moving average.
-    slow : str
-        The column label that corresponds to the slow, less responsive, signal,
-        e.g. the larger period moving average.
-    type : {"buy", "sell"}
-        The trade type that should be observed from the signal, i.e. buy or
-        sell.
-
-    Results
-    -------
-    pandas.core.frame.DataFrame
-        A pandas dataframe that will contain two columns containing the entry
-        and exit timestamps respectively for a trade.
-
-    Examples
-    --------
-    >>> from htp.api.oanda import Candles
-    >>> from htp.analyse import indicator, evaluate
-    >>> data_sorted = Candles.to_df(
-    ...     instrument="AUD_JPY",
-    ...     queryParameters={"granularity": "H1",
-    ...                      "from": "2018-06-11T16:00:00.000000000Z",
-    ...                      "count": 2000})
-    >>> sma_5 = indicator.smooth_moving_average(
-    ...     data_sorted, column="close", period=5)
-    >>> sma_5_10 = indicator.smooth_moving_average(
-    ...     data_sorted, column="close", df2=sma_5, concat=True, period=10)
-    >>> signal_cross(sma_5_10, "close_sma_5", "close_sma_10").head(5)
-                    entry                exit
-    0 2018-06-12 02:00:00 2018-06-12 10:00:00
-    1 2018-06-13 03:00:00 2018-06-13 20:00:00
-    2 2018-06-14 15:00:00 2018-06-14 17:00:00
-    3 2018-06-15 06:00:00 2018-06-15 11:00:00
-    4 2018-06-18 08:00:00 2018-06-18 14:00:00
-    """
-    if trade == "buy":
-        system = "{} > {}".format(fast, slow)
-        signal = df.apply(
-            lambda x: x[fast] > x[slow], axis=1).rename(system).to_frame()
-    elif trade == "sell":
-        system = "{} < {}".format(fast, slow)
-        signal = df.apply(
-            lambda x: x[fast] < x[slow], axis=1).rename(system).to_frame()
-
-    signal["prev"] = signal[system].shift(2)
-    signal["curr"] = signal[system].shift(1)
-    signal["entry"] = signal.apply(
-        lambda x: x["prev"] is False and x["curr"] is True, axis=1)
-    signal["exit"] = signal.apply(
-        lambda x: x["prev"] is True and x["curr"] is False, axis=1)
-    entry_exit = entry_exit_combine(signal, "entry", "exit")
-    return entry_exit
-
-
 class Signals:
     """
     Function to calculate and apply a stop loss to each trade.
@@ -122,6 +15,68 @@ class Signals:
     A trailing stop loss is a value that is re-calculated each session based on
     a given logic. If the low or high crosses the current threshold for that
     session an exit signal is generated.
+    
+    Parameters
+    ----------
+
+    df_mid : pandas.core.frame.DataFrame
+        The dataframe containing a ticker's mid price for a session's open,
+        high, low & close.
+
+    df_entry : pandas.core.frame.DataFrame
+        The dataframe containing either the ticker's ask or bid price for a
+        session's open, high, low & close. This is the price at which the trade
+        enters. For a buy trade, the entry price is the ask, for a sell trade,
+        the entry price is the bid.
+
+    df_exit : pandas.core.frame.DataFrame
+        The dataframe containing either the ticker's ask or bid price for a
+        session's open, high, low & close. This is the price at which the trade
+        exits. For a buy trade, the exit is the bid, for a sell trade, the exit
+        is the ask.
+
+    df_sys : pandas.core.frame.DataFrame
+        A dataframe posessing two columns, indexed by timestamp. Both columns
+        contain values that define a standalone signal respectively. These
+        signals will be assessed to cross, thereby establishing entry and exit
+        actions.
+
+    fast : str
+        The column label for the faster moving signal column in the df_sys
+        dataframe.
+
+    slow : str
+        The column label for the slower moving signal column in the df_sys
+        dataframe.
+
+    trade : {"buy", "sell"}
+        The trade direction the system will be assessed against.
+
+    diff_SL : float
+        The number of pips the default stop loss will be established away from
+        the trade entry price.
+
+    Attributes
+    ----------
+
+    sys_en : pandas.core.frame.DataFrame
+        A dataframe containing two columns: the entry timestamp and respective
+        price value for a buy or sell trade, generated by an appropriately
+        defined signal cross in the system.
+
+    sys_ex : pandas.core.frame.DataFrame
+        A dataframe containing two columns: the exit timestamp and respective
+        price value for a buy or sell trade, generated by an appropriately
+        defined signal cross in the system.
+
+    sys_SL : pandas.core.frame.DataFrame
+        A raw dataset from which the entry and exit signals generated by a
+        system are appropriately matched to corresponding trades.
+        
+    SL_low : pandas.core.frame.DataFrame
+        A raw dataset from which the entry and exit signals generated by a
+        system are appropriately matched to corresponding trades and be
+        adjusted to a set or trailing stop loss.
     """
 
     def __init__(self, df_mid, df_entry, df_exit, df_sys, fast, slow,
@@ -156,7 +111,7 @@ class Signals:
         self.sys_SL = sys_entry_exit.merge(
             set_SL_price, how="left", left_index=True, right_index=True,
             validate="1:1")
-        
+
         df_exit.rename(columns={"low": "exit_low"}, inplace=True)
         self.SL_low = self.sys_SL.merge(
             df_exit, how="left", left_index=True, right_index=True,
@@ -167,6 +122,41 @@ class Signals:
         """
         Fuction to return trades with entry and exit signals derived from a
         given SMA cross system.
+
+        Examples
+        --------
+        >>> import copy
+        >>> from htp import runner
+        >>> from htp.api import oanda
+        >>> from htp.analyse import indicator
+        >>> func = oanda.Candles.to_df
+        >>> instrument = "AUD_JPY"
+        >>> qP = {"from": "2012-01-01 17:00:00",
+        ...       "to": "2012-06-27 17:00:00",
+        ...       "granularity": "H1", "price": "M"}
+        >>> data_mid = runner.setup(
+        ...     func=func, instrument=instrument, queryParameters=qP)
+        >>> qP_ask = copy.deepcopy(qP)
+        >>> qP_ask["price"] = "A"
+        >>> data_ask = runner.setup(
+        ...     func=func, instrument=instrument, queryParameters=qP_ask)
+        >>> qP_bid = copy.deepcopy(qP)
+        >>> qP_bid["price"] = "B"
+        >>> data_bid = runner.setup(
+        ...     func=func, instrument=instrument, queryParameters=qP_bid)
+        >>> data_prop = indicator.Momentum(data_mid)
+        >>> sma_6 = indicator.smooth_moving_average(data_mid, period=6)
+        >>> sma_6_24 = indicator.smooth_moving_average(
+        ...     data_mid, df2=sma_6, period=24, concat=True)
+        >>> Signals.sys_signals(data_mid, data_ask, data_bid, sma_6_24,
+        ...                     "close_sma_6", "close_sma_24", trade="buy",
+        ...                     diff_SL=-0.2).head()
+               entry_datetime  entry_price       exit_datetime  exit_price
+        0 2012-01-02 23:00:00       78.795 2012-01-04 05:00:00      79.463
+        1 2012-01-04 20:00:00       79.561 2012-01-05 03:00:00      79.234
+        2 2012-01-05 21:00:00       79.296 2012-01-06 07:00:00      78.982
+        3 2012-01-09 12:00:00       78.553 2012-01-11 01:00:00      79.070
+        4 2012-01-11 10:00:00       79.425 2012-01-11 16:00:00      79.154
         """
         n = cls(*args, **kwargs)
         d = []
@@ -194,6 +184,41 @@ class Signals:
         Fuction to return trades with entry signals derived from a given
         SMA cross system, and exit signals set by either the system or, if
         crossed, a stop loss limit x pips from the entry price.
+
+        Examples
+        --------
+        >>> import copy
+        >>> from htp import runner
+        >>> from htp.api import oanda
+        >>> from htp.analyse import indicator
+        >>> func = oanda.Candles.to_df
+        >>> instrument = "AUD_JPY"
+        >>> qP = {"from": "2012-01-01 17:00:00",
+        ...       "to": "2012-06-27 17:00:00",
+        ...       "granularity": "H1", "price": "M"}
+        >>> data_mid = runner.setup(
+        ...     func=func, instrument=instrument, queryParameters=qP)
+        >>> qP_ask = copy.deepcopy(qP)
+        >>> qP_ask["price"] = "A"
+        >>> data_ask = runner.setup(
+        ...     func=func, instrument=instrument, queryParameters=qP_ask)
+        >>> qP_bid = copy.deepcopy(qP)
+        >>> qP_bid["price"] = "B"
+        >>> data_bid = runner.setup(
+        ...     func=func, instrument=instrument, queryParameters=qP_bid)
+        >>> data_prop = indicator.Momentum(data_mid)
+        >>> sma_6 = indicator.smooth_moving_average(data_mid, period=6)
+        >>> sma_6_24 = indicator.smooth_moving_average(
+        ...     data_mid, df2=sma_6, period=24, concat=True)
+        >>> Signals.set_stop_signals(
+        ...     data_mid, data_ask, data_bid, sma_6_24, "close_sma_6",
+        ...     "close_sma_24", trade="buy", diff_SL=-0.2).head()
+               entry_datetime  entry_price       exit_datetime  exit_price
+        0 2012-01-02 23:00:00       78.795 2012-01-04 05:00:00      79.463
+        1 2012-01-04 20:00:00       79.561 2012-01-04 23:00:00      79.350
+        2 2012-01-05 21:00:00       79.296 2012-01-05 22:00:00      79.086
+        3 2012-01-09 12:00:00       78.553 2012-01-11 01:00:00      79.070
+        4 2012-01-11 10:00:00       79.425 2012-01-11 11:00:00      79.216
         """
         n = cls(*args, **kwargs)
         n.SL_low["set_SL_exit_type"] = n.SL_low.apply(
@@ -207,6 +232,42 @@ class Signals:
         Fuction to return trades with entry signals derived from a given
         SMA cross system, and exit signals set by either the system or, if
         crossed, a stop loss limit x * ATR from the entry price.
+
+        Examples
+        --------
+        >>> import copy
+        >>> from htp import runner
+        >>> from htp.api import oanda
+        >>> from htp.analyse import indicator
+        >>> func = oanda.Candles.to_df
+        >>> instrument = "AUD_JPY"
+        >>> qP = {"from": "2012-01-01 17:00:00",
+        ...       "to": "2012-06-27 17:00:00",
+        ...       "granularity": "H1", "price": "M"}
+        >>> data_mid = runner.setup(
+        ...     func=func, instrument=instrument, queryParameters=qP)
+        >>> qP_ask = copy.deepcopy(qP)
+        >>> qP_ask["price"] = "A"
+        >>> data_ask = runner.setup(
+        ...     func=func, instrument=instrument, queryParameters=qP_ask)
+        >>> qP_bid = copy.deepcopy(qP)
+        >>> qP_bid["price"] = "B"
+        >>> data_bid = runner.setup(
+        ...     func=func, instrument=instrument, queryParameters=qP_bid)
+        >>> data_prop = indicator.Momentum(data_mid)
+        >>> sma_6 = indicator.smooth_moving_average(data_mid, period=6)
+        >>> sma_6_24 = indicator.smooth_moving_average(
+        ...     data_mid, df2=sma_6, period=24, concat=True)
+        >>> Signals.atr_stop_signals(
+        ...     data_prop.atr, data_mid, data_ask, data_bid, sma_6_24,
+        ...     "close_sma_6", "close_sma_24", ATR_multiplier=-2,
+        ...     trade="buy").head()
+               entry_datetime  entry_price       exit_datetime  exit_price
+        0 2012-01-02 23:00:00       78.795 2012-01-04 02:00:00   79.196604
+        1 2012-01-04 20:00:00       79.561 2012-01-05 00:00:00   79.220111
+        2 2012-01-05 21:00:00       79.296 2012-01-06 07:00:00   78.982000
+        3 2012-01-09 12:00:00       78.553 2012-01-11 01:00:00   79.070000
+        4 2012-01-11 10:00:00       79.425 2012-01-11 16:00:00   79.154000
         """
         n = cls(*args, **kwargs)
         # ATR values shifted for calculations, i.e. use previous sessions's ATR
@@ -226,7 +287,7 @@ class Signals:
             validate="1:1")
         set_ATR_SL["set_ATR_SL_exit_type"] = set_ATR_SL.apply(
             n._signal_SL, args=("ATR_SL",), axis=1)
-        
+
         return n._gen_signal(set_ATR_SL, "set_ATR_SL_exit_type", "ATR_SL")
 
     def _signal(self, df_sys, fast, slow, trade="buy", df_price=None,

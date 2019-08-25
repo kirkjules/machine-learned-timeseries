@@ -17,7 +17,7 @@ def setup():
     func = oanda.Candles.to_df
     instrument = "AUD_JPY"
     queryParameters = {
-        "from": "2012-01-01 17:00:00", "to": "2012-06-27 17:00:00",
+        "from": "2012-01-01 17:00:00", "to": "2012-03-27 17:00:00",
         "granularity": "H1", "price": "M"}
     return {"func": func, "instrument": instrument, "queryParameters":
             queryParameters}
@@ -50,10 +50,15 @@ def dataset(setup):
             "data_sys": sma_6_24, "data_prop": data_prop.atr}
 
 
-def test_fixtures(dataset):
+def test_logic(dataset):
     trade_data = evaluate.Signals.sys_signals(
         dataset["data_mid"], dataset["data_ask"], dataset["data_bid"],
         dataset["data_sys"], "close_sma_6", "close_sma_24", trade="buy",
         diff_SL=-0.2)
-    print(trade_data)
-    assert type(trade_data) == pandas.core.frame.DataFrame
+    test_trade_logic = trade_data["entry_datetime"] < \
+            trade_data["exit_datetime"]
+    test_trade_to_trade = trade_data["entry_datetime"] > \
+            trade_data["exit_datetime"].shift(1)
+    test_trade_to_trade.drop(0, axis=0, inplace=True)
+    assert all(test_trade_logic.to_numpy()) is True
+    assert all(test_trade_to_trade.to_numpy()) is True
