@@ -1,4 +1,5 @@
 """Module used to evaluate trade signals generated from analysis."""
+import sys
 import copy
 import numpy as np
 import pandas as pd
@@ -167,17 +168,31 @@ class Signals:
 
         logger.info(
             f"Generating signals from {n.sys_SL.iloc[0].name} to "
-            f"{n.sys_SL.iloc[-1].name}")
-        for row in tqdm(n.sys_SL.iterrows()):
+            f"{n.sys_SL.iloc[-1].name}\n")
+        
+        # for row in tqdm(n.sys_SL.iterrows()):
 
-            if row[1]["entry_type"] == "entry" and en is False:
+        #    if row[1]["entry_type"] is True and en is False:
+        #        signal_data["entry_datetime"] = row[0]
+        #        signal_data["entry_price"] = row[1]["entry_price"]
+        #        en = True
+
+        #    elif row[1]["exit_type"] is True and en is True:
+        #        signal_data["exit_datetime"] = row[0]
+        #        signal_data["exit_price"] = row[1]["exit_price"]
+        #        d.append(copy.deepcopy(signal_data))
+        #        en = False
+
+        for row in tqdm(n.sys_SL.itertuples()):
+
+            if row[5] is True and en is False:
                 signal_data["entry_datetime"] = row[0]
-                signal_data["entry_price"] = row[1]["entry_price"]
+                signal_data["entry_price"] = row[6]
                 en = True
 
-            elif row[1]["exit_type"] == "exit" and en is True:
+            elif row[7] is True and en is True:
                 signal_data["exit_datetime"] = row[0]
-                signal_data["exit_price"] = row[1]["exit_price"]
+                signal_data["exit_price"] = row[8]
                 d.append(copy.deepcopy(signal_data))
                 en = False
 
@@ -297,12 +312,17 @@ class Signals:
 
     def _signal(self, df_sys, fast, slow, trade="buy", df_price=None,
                 signal="entry", price="open"):
-
+        """
+        1. 1min 28s ± 5.46 s per loop (mean ± std. dev. of 7 runs, 1 loop each)
+        2. 53.4 s ± 1.12 s per loop (mean ± std. dev. of 7 runs, 1 loop each)
+        3. 10.8 s ± 400 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
+        """
         if trade == "buy":
             system = "{} > {}".format(fast, slow)
-            en_ex = df_sys.apply(
-                lambda x: signal if x[fast] > x[slow] else False, axis=1
-                ).rename(system).to_frame()
+            # en_ex = df_sys.apply(
+            #    lambda x: signal if x[fast] > x[slow] else False, axis=1
+            #    ).rename(system).to_frame()
+            df_sys.eval(f"sys = {fast} > {slow}", inplace=True)
 
         elif trade == "sell":
             system = "{} < {}".format(fast, slow)
@@ -310,11 +330,25 @@ class Signals:
                 lambda x: signal if x[fast] < x[slow] else False, axis=1
                 ).rename(system).to_frame()
 
-        en_ex["prev"] = en_ex[system].shift(2)
-        en_ex["curr"] = en_ex[system].shift(1)
+        # en_ex["prev"] = en_ex[system].shift(2)
+        # en_ex["curr"] = en_ex[system].shift(1)
 
-        en_ex[signal] = en_ex.apply(self._entry_exit, args=(signal,), axis=1)
-        en_ex_prep = en_ex[en_ex[signal] == signal][signal].reset_index()
+        df_sys["prev_sys"] = df_sys["sys"].shift(2)
+        df_sys["curr_sys"] = df_sys["sys"].shift(1)
+
+        # en_ex[signal] = en_ex.apply(self._entry_exit, args=(signal,), axis=1)
+
+        if signal == "entry":
+            df_sys[signal] = pd.eval(
+                "(df_sys.curr_sys == 1) & (df_sys.prev_sys == 0)")
+        elif signal == "exit":
+            df_sys[signal] = pd.eval(
+                "(df_sys.curr_sys == 0) & (df_sys.prev_sys == 1)") 
+
+        # en_ex_prep = en_ex[en_ex[signal] == signal][signal].reset_index()
+
+        en_ex_prep = df_sys[df_sys[signal] == True][signal].copy().reset_index()
+        del df_sys
 
         en_ex_price = en_ex_prep.merge(
             df_price[price], how="left", left_on="timestamp",
@@ -339,11 +373,11 @@ class Signals:
 
     def _set_SL(self, row, SL=.0):
 
-        if row["entry_type"] == "entry":
+        if row["entry_type"] is True:
             limit = float(row["open"]) + SL
             return limit
 
-        elif row["exit_type"] == "exit":
+        elif row["exit_type"] is True:
             return "exit"
 
     def _set_ATR_SL(self, row, multiplier):
