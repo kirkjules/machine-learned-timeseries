@@ -280,8 +280,13 @@ class Candles(Api):
         if "exc" in resp:
             return None
 
-        price = "".join([i for i in ["mid", "bid", "ask"]
-                         if i in resp["candles"][0].keys()])
+        try:
+            price = "".join([i for i in ["mid", "bid", "ask"]
+                             if i in resp["candles"][0].keys()])
+        except IndexError:
+            logger.info(resp["candles"])
+            return pd.DataFrame(columns=["open", "high", "low", "close"])
+
         for i in range(len(resp["candles"])):
             dic[resp["candles"][i]["time"]] = resp["candles"][i][price]
 

@@ -6,6 +6,7 @@ verify_ssl = true
 [dev-packages]
 htp = {editable = true,path = "."}
 pytest = "*"
+ipython = "*"
 
 [packages]
 requests = "*"
@@ -13,6 +14,9 @@ pandas = "*"
 loguru = "*"
 scikit-learn = "*"
 pyyaml = "*"
+matplotlib = "*"
+tqdm = "*"
+tables = "*"
 
 [requires]
 python_version = "3.7"

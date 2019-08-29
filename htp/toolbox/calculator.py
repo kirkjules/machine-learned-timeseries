@@ -344,7 +344,7 @@ def performance_stats(results):
         results[results["P/L AUD"] < 0]["P/L AUD"].mean()
         ).quantize(decimal.Decimal("0.01"))
 
-    holding_time = results["exit"] - results["entry"]
+    holding_time = results["exit_datetime"] - results["entry_datetime"]
     stats["average_holding_time_per_trade"] = str(
         datetime.timedelta(seconds=holding_time.mean().seconds))
 

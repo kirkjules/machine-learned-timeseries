@@ -2,6 +2,7 @@
 iris_decision_tree
 config.ini
 workshop/
+*.h5
 *.swp
 *.DS_Store
 *.csv

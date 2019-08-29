@@ -1,3 +1,4 @@
+# import sys
 import multiprocessing
 from queue import Queue
 from functools import partial
@@ -236,7 +237,7 @@ class ParallelWorker(Worker):
         """
         return func(**{k: iterable})
 
-    def prl(self):
+    def prl(self, lock_func=None, lock_arg=None):
         """
         Method to run target function in parallel. The pool of workers is
         initialised with a lock that is used for logging in the target
@@ -248,9 +249,12 @@ class ParallelWorker(Worker):
             A list of elements, each the respective result of the target
             function working on a given value present in the iterable.
         """
-        l_ = multiprocessing.Lock()
+        if lock_func is None:
+            lock_func = self._init_lock
+            lock_arg = multiprocessing.Lock()
+
         pool = multiprocessing.Pool(
-            processes=4, initializer=self._init_lock, initargs=(l_,))
+            processes=3, initializer=lock_func, initargs=(lock_arg,))
         results = []
         for i in pool.map(partial(self._arg_kw, self.func, self.iterable_arg),
                           self.iterable):
