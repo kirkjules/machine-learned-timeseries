@@ -145,6 +145,20 @@ def main():
 
     data_properties.to_csv("data/AUD_JPY_data_properties.csv")
 
+    sma_close = pd.concat(
+        [data_mid["close"], data_properties["ATR"], sma_x_y], axis=1)
+    sma_close["close_diff"] = sma_close["close"] - sma_close["close"].shift(1)
+    sma_close["close_diff_v_atr"] = np.where(
+        sma_close["close_diff"].abs() > sma_close["ATR"], 1, 0)
+    for i in sma_x_y.columns:
+        sma_close[f"{i}_close_diff%"] =\
+                (sma_close["close"] - sma_close[i]) /\
+                sma_close["close"] *\
+                100
+        sma_close.drop(i, axis=1, inplace=True)
+    sma_close.drop(["close", "ATR", "close_diff"], axis=1, inplace=True)
+    sma_close = sma_close.round(4)
+
 
 if __name__ == "__main__":
     main()

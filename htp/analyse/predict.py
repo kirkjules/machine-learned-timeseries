@@ -44,8 +44,8 @@ def random_forest(results_with_properties):
         (pred_results.loc[1, 1] / pred_results[1].sum() * 100), decimals=2)
 
     # print(f"{pred_win_rate}\n")
-    if pred_win_rate < 55.:
-        return "Predicted win rate less than 55%", None, pred_win_rate
+    if pred_win_rate < 30.:
+        return None, pred_win_rate
 
     live = results_with_properties[400:].copy()
     X_live = live.drop("win_loss", axis=1)
@@ -57,6 +57,6 @@ def random_forest(results_with_properties):
         copy=True)
 
     pred_win_df = pred_df[pred_df["win_loss"] == 1].copy()
-    base_line_df = y_live.to_frame(name="win_loss")
+    # base_line_df = y_live.to_frame(name="win_loss")
 
-    return base_line_df, pred_win_df, pred_win_rate
+    return pred_win_df, pred_win_rate

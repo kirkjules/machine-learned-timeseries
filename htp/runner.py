@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -35,16 +36,17 @@ def count(trades):
             (Decimal(x["exit_price"]) - Decimal(x["entry_price"]))
             * Decimal("100")).quantize(Decimal(".1")), axis=1)
     d_pos_size = {}
-    for i in trades.iterrows():
-        trade = i[1]
+    # for i in trades.iterrows():
+    for trade in trades.itertuples():
+        # trade = i[1]
         size = calculator.base_conv_pos_size(
-            ACC_AMOUNT=AMOUNT, CONV_ASK=trade["entry_price"], STOP=STOP,
+            ACC_AMOUNT=AMOUNT, CONV_ASK=trade[2], STOP=STOP,
             KNOWN_RATIO=KNOWN_RATIO, RISK_PERC=RISK_PERC)
         profit = calculator.profit_loss(
-            ENTRY=trade["entry_price"], EXIT=trade["exit_price"],
-            POS_SIZE=size, CONV_ASK=trade["entry_price"], CNT=0)
+            ENTRY=trade[2], EXIT=trade[4],
+            POS_SIZE=size, CONV_ASK=trade[4], CNT=0)
         AMOUNT += profit
-        d_pos_size[trade["entry_datetime"]] = {
+        d_pos_size[trade[1]] = {
             "POS_SIZE": size, "P/L AUD": profit, "P/L REALISED": AMOUNT}
     counting = pd.DataFrame.from_dict(d_pos_size, orient="index")
     entry_exit_complete = trades.merge(
@@ -54,7 +56,7 @@ def count(trades):
     return entry_exit_complete
 
 
-def count_v2(data_mid, trades):
+def count_unrealised(data_mid, trades):
     """
     Function to calculate trade information: P/L Pips, P/L AUD, Position Size,
     Realised P/L.
@@ -89,8 +91,10 @@ def count_v2(data_mid, trades):
         profit = []
         info = []
         margin = []
-        for trade in unrealised:
-            if timestamp == trade["exit_datetime"]:
+        for i in range(len(unrealised)):
+            if timestamp == unrealised[i]["exit_datetime"]:
+                trade = unrealised[i]  # .pop(i)
+                # print(trade)
                 margin.append(trade["margin"])
                 pips.append(trade["P/L PIPS"])
                 profit.append(trade["P/L AUD"])
@@ -111,37 +115,41 @@ def count_v2(data_mid, trades):
                 "P/L PIPS": np.nan, "P/L AUD": np.nan, "trade_info": np.nan,
                 "P/L REALISED": AMOUNT}
 
-        trade = trades.loc[trades["entry_datetime"] == timestamp].squeeze()
-        if len(trade) > 0:
-            # print(trade)
-            size = calculator.base_conv_pos_size(
-                ACC_AMOUNT=AMOUNT, CONV_ASK=trade["entry_price"], STOP=STOP,
-                KNOWN_RATIO=KNOWN_RATIO, RISK_PERC=RISK_PERC)
-            profit = calculator.profit_loss(
-                ENTRY=trade["entry_price"], EXIT=trade["exit_price"],
-                POS_SIZE=size, CONV_ASK=trade["entry_price"], CNT=0)
-            margin = (Decimal(AMOUNT) * Decimal(0.01)).quantize(Decimal(".01"))
-            AMOUNT -= float(margin)
-            values = {
-                "entry_datetime": trade["entry_datetime"], "entry_price":
-                trade["entry_price"], "exit_datetime": trade["exit_datetime"],
-                "exit_price": trade["exit_price"], "POS_SIZE": size, "P/L AUD":
-                profit, "P/L PIPS": trade["P/L PIPS"], "margin": margin,
-                "label": trade["label"]}
-            unrealised.append(values)
+        entries = trades.loc[trades["entry_datetime"] == timestamp]
+        if len(entries) > 0:
+            for i in range(len(entries)):
+                trade = entries.iloc[i]
+                size = calculator.base_conv_pos_size(
+                    ACC_AMOUNT=AMOUNT, CONV_ASK=trade["entry_price"],
+                    STOP=STOP, KNOWN_RATIO=KNOWN_RATIO, RISK_PERC=RISK_PERC)
+                profit = calculator.profit_loss(
+                    ENTRY=trade["entry_price"], EXIT=trade["exit_price"],
+                    POS_SIZE=size, CONV_ASK=trade["entry_price"], CNT=0)
+                margin = (
+                    Decimal(AMOUNT) * Decimal(0.01)).quantize(Decimal(".01"))
+                AMOUNT -= float(margin)
+                values = {
+                    "entry_datetime": trade["entry_datetime"], "entry_price":
+                    Decimal(trade["entry_price"]).quantize(Decimal(".0001")),
+                    "exit_datetime": trade["exit_datetime"], "exit_price":
+                    Decimal(trade["exit_price"]).quantize(Decimal(".0001")),
+                    "POS_SIZE": size, "P/L AUD":
+                    profit, "P/L PIPS": trade["P/L PIPS"], "margin": margin,
+                    "label": trade["label"]}
+                unrealised.append(copy.deepcopy(values))
 
     counting = pd.DataFrame.from_dict(d, orient="index")
     return counting
 
 
-def win_loss(row):
-    if row["P/L AUD"] >= 0:
-        return 1
-    else:
-        return 0
+# def win_loss(row):
+#     if row["P/L AUD"] >= 0:
+#         return 1
+#     else:
+#         return 0
 
 
-def gen_signals(data_mid, data_entry, data_exit, data_sys, temp_prop,
+def gen_signals(data_mid, data_entry, data_exit, data_sys, temp_prop, extra,
                 iterable):
 
     label = "{0}_{1}".format(iterable[0], iterable[1])
@@ -163,13 +171,20 @@ def gen_signals(data_mid, data_entry, data_exit, data_sys, temp_prop,
                     f"generated insufficient signals.")
         return None
 
+    properties = temp_prop.merge(
+        extra[
+            [f"{fast}_close_diff%", f"{slow}_close_diff%", "close_diff_v_atr"]
+        ], how="left", left_index=True, right_index=True, validate="1:1")
+
+    properties = properties.shift(1)
+
     chunks = []
     for ind in range(int(num_chunks)):
         chunks.append((ind * 100, ind * 100 + 499))
 
     predictions = workshop.ParallelWorker(
-        predict_signal, "iterable", label, data_mid, data_sys, sys_signals,
-        fast, slow, temp_prop, iterable=chunks).prl()
+        predict_signal, "iterable", label, sys_signals, fast, slow,
+        properties, iterable=chunks).prl()
 
     with pd.HDFStore("data/AUD_JPY.h5") as store:
         try:
@@ -180,16 +195,18 @@ def gen_signals(data_mid, data_entry, data_exit, data_sys, temp_prop,
             pass
 
 
-def predict_signal(label, data_mid, data_sys, sys_signals, fast, slow,
-                   temp_prop, iterable=None):
+def predict_signal(label, sys_signals, fast, slow, properties, iterable=None):
 
     logger.info("{} {} to {}".format(label, iterable[0], iterable[1]))
 
     data = sys_signals[iterable[0]:iterable[1]].copy()
     data.reset_index(drop=True, inplace=True)
 
-    check_results = count(data[0:400].copy())
-    performance = calculator.performance_stats(check_results)
+    # check_results = runner.count(data[0:400].copy())
+    # performance = calculator.performance_stats(check_results)
+
+    results = count(data)
+    performance = calculator.performance_stats(results[0:400])
 
     if performance["win_%"] < 25:
         logger.info(
@@ -200,56 +217,61 @@ def predict_signal(label, data_mid, data_sys, sys_signals, fast, slow,
         return None
 
     else:
-        results = count(data)
-        results["win_loss"] = results.apply(win_loss, axis=1)
+        # results = count(data)
+        # results["win_loss"] = results.apply(win_loss, axis=1)
+        results["win_loss"] = np.where(results["P/L AUD"] > 0, 1, 0)
         temp_results = results[["entry_datetime", "win_loss"]].copy()
         temp_results.set_index("entry_datetime", inplace=True)
 
-        sma_open = pd.concat(
-            [data_mid["open"], temp_prop["ATR"], data_sys.shift(1)],
-            axis=1)
-        sma_open["open_diff"] = sma_open["open"] - \
-            sma_open["open"].shift(1)
-        sma_open["open_diff_v_atr"] = sma_open.apply(
-            lambda x: 1 if x["open_diff"] > x["ATR"] else 0, axis=1)
+        # sma_open = pd.concat(
+        #     [data_mid["open"], temp_prop["ATR"], data_sys.shift(1)],
+        #     axis=1)
+        # sma_open["open_diff"] = sma_open["open"] - \
+        #     sma_open["open"].shift(1)
+        # sma_open["open_diff_v_atr"] = sma_open.apply(
+        #     lambda x: 1 if x["open_diff"] > x["ATR"] else 0, axis=1)
 
-        for i in [fast, slow]:
-            sma_open[f"{i}_open_diff%"] = \
-                (sma_open["open"] - sma_open[i]) / \
-                sma_open["open"] * \
-                100
+        # for i in [fast, slow]:
+        #     sma_open[f"{i}_open_diff%"] = \
+        #        (sma_open["open"] - sma_open[i]) / \
+        #         sma_open["open"] * \
+        #         100
 
-        properties = temp_prop.merge(
-            sma_open[[f"{fast}_open_diff%",
-                      f"{slow}_open_diff%",
-                      "open_diff_v_atr"]],  # , "open", "close_sma_6"]],
-            how="left", left_index=True, right_index=True, validate="1:1")
-        properties.drop("ATR", axis=1, inplace=True)
+        # properties = temp_prop.merge(
+        #     sma_open[[f"{fast}_open_diff%",
+        #               f"{slow}_open_diff%",
+        #               "open_diff_v_atr"]],  # , "open", "close_sma_6"]],
+        #     how="left", left_index=True, right_index=True, validate="1:1")
+        # properties.drop("ATR", axis=1, inplace=True)
 
         results_with_properties = temp_results.merge(
             properties, how="left", left_index=True,
             right_index=True, validate="1:1")
         results_with_properties.dropna(inplace=True)
-        base_line_results, prediction_results, win_rate = \
+        # results_with_properties.reset_index(drop=True, inplace=True)
+
+        prediction_results, win_rate = \
             predict.random_forest(results_with_properties)
 
         if prediction_results is not None:
-            prediction_entry_exit = prediction_results.merge(
-                sys_signals, how="left", left_index=True,
-                right_on="entry_datetime", validate="1:1").reset_index(
-                    drop=True)
-            prediction_en_ex_prop = prediction_entry_exit.merge(
-                temp_prop, how="left", right_index=True,
-                left_on="entry_datetime", validate="1:1")
 
-            prediction_en_ex_prop["iky_cat_"] = \
+            # prediction_entry_exit = prediction_results.merge(
+            #     sys_signals, how="left", left_index=True,
+            #     right_on="entry_datetime", validate="1:1").reset_index(
+            #         drop=True)
+
+            prediction_en_ex = sys_signals[
+                sys_signals["entry_datetime"].isin(prediction_results.index)
+            ].copy()
+
+            prediction_en_ex_prop = \
+                prediction_en_ex.merge(
+                    properties, how="left", right_index=True,
+                    left_on="entry_datetime", validate="1:1")
+
+            prediction_en_ex_prop["iky_cat"] = \
                 prediction_en_ex_prop["iky_cat"].astype(str)
-            prediction_en_ex_prop.drop("iky_cat", axis=1, inplace=True)
-            prediction_en_ex_prop.rename(
-                columns={"iky_cat_": "iky_cat"}, inplace=True)
-
-            # print(prediction_en_ex_prop.dtypes)
-            # print(prediction_en_ex_prop.head())
+            prediction_en_ex_prop.reset_index(drop=True, inplace=True)
 
             logger.info(
                 "{} from {} to {} tested, machine learning predicts "
@@ -268,7 +290,7 @@ def predict_signal(label, data_mid, data_sys, sys_signals, fast, slow,
 
 def main():
 
-    pd.set_option("display.max_columns", 12)
+    pd.set_option("display.max_columns", 16)
     pd.set_option('max_colwidth', 150)
     pd.set_option("display.max_rows", 50)
 
@@ -280,11 +302,13 @@ def main():
         data_entry = store["data_ask"]
         data_exit = store["data_bid"]
         data_sys = store["sma_x_y"]
-        temp_prop = store["properties"].shift(1)
+        prop = store["properties"]
+        extra = store["properties_extra"]
 
     for combinations in tqdm([(24, 48), (48, 96)]):
         gen_signals(
-            data_mid, data_entry, data_exit, data_sys, temp_prop, combinations)
+            data_mid, data_entry, data_exit, data_sys, prop, extra,
+            combinations)
 
 
 if __name__ == "__main__":
@@ -294,7 +318,7 @@ if __name__ == "__main__":
     # sys.exit()
     with pd.HDFStore("data/AUD_JPY.h5") as store:
         # linear_results = count_v2(store["data_mid"], store["base_line"])
-        machine_learn_results = count_v2(
+        machine_learn_results = count_unrealised(
             store["data_mid"], store["predictions"])
     # print(
     #     linear_results[~linear_results["P/L PIPS"].isnull()])
