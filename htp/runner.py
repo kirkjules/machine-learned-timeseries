@@ -76,7 +76,7 @@ def count_unrealised(data_mid, trades):
     AMOUNT = 1000
     STOP = 50
     KNOWN_RATIO = 0.01
-    RISK_PERC = 0.01
+    RISK_PERC = 0.0025
     trades["P/L PIPS"] = trades.apply(
         lambda x: (
             (Decimal(x["exit_price"]) - Decimal(x["entry_price"]))
@@ -126,7 +126,7 @@ def count_unrealised(data_mid, trades):
                     ENTRY=trade["entry_price"], EXIT=trade["exit_price"],
                     POS_SIZE=size, CONV_ASK=trade["entry_price"], CNT=0)
                 margin = (
-                    Decimal(AMOUNT) * Decimal(0.01)).quantize(Decimal(".01"))
+                    Decimal(AMOUNT) * Decimal(0.0025)).quantize(Decimal(".01"))
                 AMOUNT -= float(margin)
                 values = {
                     "entry_datetime": trade["entry_datetime"], "entry_price":
@@ -142,28 +142,22 @@ def count_unrealised(data_mid, trades):
     return counting
 
 
-# def win_loss(row):
-#     if row["P/L AUD"] >= 0:
-#         return 1
-#     else:
-#         return 0
-
-
 def gen_signals(data_mid, data_entry, data_exit, data_sys, temp_prop, extra,
                 iterable):
 
     label = "{0}_{1}".format(iterable[0], iterable[1])
     fast = f"close_sma_{iterable[0]}"
     slow = f"close_sma_{iterable[1]}"
-
+    x = 300
     print(label)
-    sys_signals = evaluate.Signals.sys_signals(
+    sys_signals = evaluate.Signals.set_stop_signals(
         data_mid, data_entry, data_exit, data_sys[[fast, slow]].copy(), fast,
-        slow, trade="buy", diff_SL=-0.2)
+        slow, trade="buy", diff_SL=-0.5)
 
     sys_signals["label"] = label
 
-    num_chunks = ((len(sys_signals) - 500) / 100) + 2
+    # num_chunks = ((len(sys_signals) - 500) / 100) + 2
+    num_chunks = ((len(sys_signals) - x - 50) / 50) + 2
 
     if num_chunks < 1:
         logger.info(f"From {sys_signals['entry_datetime'].iloc[0]} to "
@@ -180,85 +174,62 @@ def gen_signals(data_mid, data_entry, data_exit, data_sys, temp_prop, extra,
 
     chunks = []
     for ind in range(int(num_chunks)):
-        chunks.append((ind * 100, ind * 100 + 499))
+        # chunks.append((ind * 100, ind * 100 + 499))
+        chunks.append((ind * 50, ind * 50 + x + 50))
 
     predictions = workshop.ParallelWorker(
         predict_signal, "iterable", label, sys_signals, fast, slow,
-        properties, iterable=chunks).prl()
+        properties, x, iterable=chunks).prl()
 
     with pd.HDFStore("data/AUD_JPY.h5") as store:
         try:
             store.append(
-                "predictions", pd.concat(
+                f"predictions/{label}", pd.concat(
                     [df for df in predictions if df is not None], axis=0))
         except ValueError:
             pass
 
 
-def predict_signal(label, sys_signals, fast, slow, properties, iterable=None):
+def predict_signal(label, sys_signals, fast, slow, properties, x,
+                   iterable=None):
 
-    logger.info("{} {} to {}".format(label, iterable[0], iterable[1]))
+    # logger.info("{} {} to {}".format(label, iterable[0], iterable[1]))
 
     data = sys_signals[iterable[0]:iterable[1]].copy()
+    if len(data) <= (x + 1):
+        logger.info(
+            "{} ({} {}) not tested because no test trades to predict".format(
+                label, iterable[0], iterable[1]))
+        return None
     data.reset_index(drop=True, inplace=True)
 
-    # check_results = runner.count(data[0:400].copy())
-    # performance = calculator.performance_stats(check_results)
-
     results = count(data)
-    performance = calculator.performance_stats(results[0:400])
+    performance = calculator.performance_stats(results[0:x])
 
-    if performance["win_%"] < 25:
+    if performance["win_%"] < 40.:
         logger.info(
-            "{} from {} to {} not tested, prior 400 signals "
+            "{} ({} {}) from {} to {} not tested, prior {} signals "
             "yielded less than 40% win rate".format(
-                label, data["entry_datetime"].iloc[400],
-                data["entry_datetime"].iloc[-1]))
+                label, iterable[0], iterable[1],
+                # data["entry_datetime"].iloc[400],
+                data["entry_datetime"].iloc[(x + 1)],
+                data["entry_datetime"].iloc[-1], x))
         return None
 
     else:
-        # results = count(data)
-        # results["win_loss"] = results.apply(win_loss, axis=1)
         results["win_loss"] = np.where(results["P/L AUD"] > 0, 1, 0)
         temp_results = results[["entry_datetime", "win_loss"]].copy()
         temp_results.set_index("entry_datetime", inplace=True)
-
-        # sma_open = pd.concat(
-        #     [data_mid["open"], temp_prop["ATR"], data_sys.shift(1)],
-        #     axis=1)
-        # sma_open["open_diff"] = sma_open["open"] - \
-        #     sma_open["open"].shift(1)
-        # sma_open["open_diff_v_atr"] = sma_open.apply(
-        #     lambda x: 1 if x["open_diff"] > x["ATR"] else 0, axis=1)
-
-        # for i in [fast, slow]:
-        #     sma_open[f"{i}_open_diff%"] = \
-        #        (sma_open["open"] - sma_open[i]) / \
-        #         sma_open["open"] * \
-        #         100
-
-        # properties = temp_prop.merge(
-        #     sma_open[[f"{fast}_open_diff%",
-        #               f"{slow}_open_diff%",
-        #               "open_diff_v_atr"]],  # , "open", "close_sma_6"]],
-        #     how="left", left_index=True, right_index=True, validate="1:1")
-        # properties.drop("ATR", axis=1, inplace=True)
 
         results_with_properties = temp_results.merge(
             properties, how="left", left_index=True,
             right_index=True, validate="1:1")
         results_with_properties.dropna(inplace=True)
-        # results_with_properties.reset_index(drop=True, inplace=True)
 
         prediction_results, win_rate = \
-            predict.random_forest(results_with_properties)
+            predict.random_forest(results_with_properties, x)
 
         if prediction_results is not None:
-
-            # prediction_entry_exit = prediction_results.merge(
-            #     sys_signals, how="left", left_index=True,
-            #     right_on="entry_datetime", validate="1:1").reset_index(
-            #         drop=True)
 
             prediction_en_ex = sys_signals[
                 sys_signals["entry_datetime"].isin(prediction_results.index)
@@ -273,19 +244,33 @@ def predict_signal(label, sys_signals, fast, slow, properties, iterable=None):
                 prediction_en_ex_prop["iky_cat"].astype(str)
             prediction_en_ex_prop.reset_index(drop=True, inplace=True)
 
+            prediction_results = count(prediction_en_ex)
+            performance_results = \
+                calculator.performance_stats(prediction_results)
+            
             logger.info(
-                "{} from {} to {} tested, machine learning predicts "
-                "{}% win rate".format(
-                    label, data["entry_datetime"].iloc[400],
-                    data["entry_datetime"].iloc[-1], win_rate))
+                "{} ({} {}) from {} to {} tested, machine learning predicts "
+                "{}% win rate, true {}% win rate realised a ${} net "
+                "profit".format(
+                    label, iterable[0], iterable[1],
+                    data["entry_datetime"].iloc[(x + 1)],  # 701
+                    data["entry_datetime"].iloc[-1], win_rate,
+                    performance_results["win_%"],
+                    performance_results["net_profit"]))
             return prediction_en_ex_prop
         else:
             logger.info(
-                "{} from {} to {} not traded, machine learning predicts "
-                "sub {}% win rate".format(
-                    label, data["entry_datetime"].iloc[400],
+                "{} ({} {}) from {} to {} not traded, machine learning "
+                "predicts sub 60% ({}%) win rate".format(
+                    label, iterable[0], iterable[1],
+                    data["entry_datetime"].iloc[(x + 1)],
                     data["entry_datetime"].iloc[-1], win_rate))
             return None
+
+
+def split(a, n):
+    k, m = divmod(len(a), n)
+    return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
 
 
 def main():
@@ -294,8 +279,11 @@ def main():
     pd.set_option('max_colwidth', 150)
     pd.set_option("display.max_rows", 50)
 
-    # periods = list(range(3, 101, 1)
-    # s = [(i, j) for i in periods for j in periods if i < j]
+    # periods = list(range(3, 101, 1))
+    periods = [3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 20, 24, 25, 28, 30, 32,
+               35, 36, 40, 48, 50, 60, 64, 70, 72, 80, 90, 96, 100]
+    s = [(i, j) for i in periods for j in periods if i < (j - 1)]
+    parts = list(split(s, 2))
 
     with pd.HDFStore("data/AUD_JPY.h5") as store:
         data_mid = store["data_mid"]
@@ -305,7 +293,7 @@ def main():
         prop = store["properties"]
         extra = store["properties_extra"]
 
-    for combinations in tqdm([(24, 48), (48, 96)]):
+    for combinations in tqdm(parts[1]):  # [(66, 72), (70, 75)]
         gen_signals(
             data_mid, data_entry, data_exit, data_sys, prop, extra,
             combinations)
@@ -313,16 +301,12 @@ def main():
 
 if __name__ == "__main__":
 
-    # import sys
+    import sys
     main()
-    # sys.exit()
+    sys.exit()
     with pd.HDFStore("data/AUD_JPY.h5") as store:
-        # linear_results = count_v2(store["data_mid"], store["base_line"])
         machine_learn_results = count_unrealised(
             store["data_mid"], store["predictions"])
-    # print(
-    #     linear_results[~linear_results["P/L PIPS"].isnull()])
-    # linear_results["P/L REALISED"].plot()
     print(
         machine_learn_results[~machine_learn_results["P/L PIPS"].isnull()])
     machine_learn_results["P/L REALISED"].plot()

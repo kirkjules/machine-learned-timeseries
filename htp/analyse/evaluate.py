@@ -169,19 +169,6 @@ class Signals:
         logger.info(
             f"Generating signals from {n.sys_SL.iloc[0].name} to "
             f"{n.sys_SL.iloc[-1].name}\n")
-        
-        # for row in tqdm(n.sys_SL.iterrows()):
-
-        #    if row[1]["entry_type"] is True and en is False:
-        #        signal_data["entry_datetime"] = row[0]
-        #        signal_data["entry_price"] = row[1]["entry_price"]
-        #        en = True
-
-        #    elif row[1]["exit_type"] is True and en is True:
-        #        signal_data["exit_datetime"] = row[0]
-        #        signal_data["exit_price"] = row[1]["exit_price"]
-        #        d.append(copy.deepcopy(signal_data))
-        #        en = False
 
         for row in tqdm(n.sys_SL.itertuples()):
 
@@ -318,36 +305,27 @@ class Signals:
         3. 10.8 s ± 400 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
         """
         if trade == "buy":
-            system = "{} > {}".format(fast, slow)
-            # en_ex = df_sys.apply(
-            #    lambda x: signal if x[fast] > x[slow] else False, axis=1
-            #    ).rename(system).to_frame()
+            # system = "{} > {}".format(fast, slow)
             df_sys.eval(f"sys = {fast} > {slow}", inplace=True)
 
-        elif trade == "sell":
-            system = "{} < {}".format(fast, slow)
-            en_ex = df_sys.apply(
-                lambda x: signal if x[fast] < x[slow] else False, axis=1
-                ).rename(system).to_frame()
-
-        # en_ex["prev"] = en_ex[system].shift(2)
-        # en_ex["curr"] = en_ex[system].shift(1)
+        # elif trade == "sell":
+            # system = "{} < {}".format(fast, slow)
+            # en_ex = df_sys.apply(
+            #     lambda x: signal if x[fast] < x[slow] else False, axis=1
+            #     ).rename(system).to_frame()
 
         df_sys["prev_sys"] = df_sys["sys"].shift(2)
         df_sys["curr_sys"] = df_sys["sys"].shift(1)
-
-        # en_ex[signal] = en_ex.apply(self._entry_exit, args=(signal,), axis=1)
 
         if signal == "entry":
             df_sys[signal] = pd.eval(
                 "(df_sys.curr_sys == 1) & (df_sys.prev_sys == 0)")
         elif signal == "exit":
             df_sys[signal] = pd.eval(
-                "(df_sys.curr_sys == 0) & (df_sys.prev_sys == 1)") 
+                "(df_sys.curr_sys == 0) & (df_sys.prev_sys == 1)")
 
-        # en_ex_prep = en_ex[en_ex[signal] == signal][signal].reset_index()
-
-        en_ex_prep = df_sys[df_sys[signal] == True][signal].copy().reset_index()
+        en_ex_prep = df_sys[
+            df_sys[signal] == True][signal].copy().reset_index()
         del df_sys
 
         en_ex_price = en_ex_prep.merge(
@@ -394,11 +372,11 @@ class Signals:
 
         try:
             if float(row["exit_low"]) < row[target]:
-                return "exit"
+                return True  # "exit"
         except TypeError:
-            return np.nan
+            return False  # np.nan
         else:
-            return np.nan
+            return False  # np.nan
 
     def _gen_signal(self, df, target_type, target_price):
 
@@ -406,22 +384,26 @@ class Signals:
         en = False
         signal_data = {}
 
-        for row in df.iterrows():
+        # for row in df.iterrows():
+        for row in df.itertuples():
 
-            if row[1]["entry_type"] == "entry" and en is False:
+            # if row[1]["entry_type"] == "entry" and en is False:
+            if row[5] is True and en is False:
                 signal_data["entry_datetime"] = row[0]
-                signal_data["entry_price"] = row[1]["entry_price"]
+                signal_data["entry_price"] = row[6]  # ["entry_price"]
                 en = True
 
-            elif row[1][target_type] == "exit" and en is True:
+            # elif row[1][target_type] == "exit" and en is True:
+            elif row[14] is True and en is True:
                 signal_data["exit_datetime"] = row[0]
-                signal_data["exit_price"] = row[1][target_price]
+                signal_data["exit_price"] = row[9]  # [target_price]
                 d.append(copy.deepcopy(signal_data))
                 en = False
 
-            elif row[1]["exit_type"] == "exit" and en is True:
+            # elif row[1]["exit_type"] == "exit" and en is True:
+            elif row[7] is True and en is True:
                 signal_data["exit_datetime"] = row[0]
-                signal_data["exit_price"] = row[1]["exit_price"]
+                signal_data["exit_price"] = row[8]  # ["exit_price"]
                 d.append(copy.deepcopy(signal_data))
                 en = False
 

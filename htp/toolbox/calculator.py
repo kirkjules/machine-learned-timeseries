@@ -360,10 +360,11 @@ def performance_stats(results):
         elif row[1]["P/L AUD"] >= 0:
             cons_loss = 0
 
-    stats["max_cons_loss"] = decimal.Decimal(max(list_cons_loss))
-    stats["mean_cons_loss"] = decimal.Decimal(
-        sum(list_cons_loss) / len(list_cons_loss)
-        ).quantize(decimal.Decimal("1."))
+    if len(list_cons_loss) > 0:
+        stats["max_cons_loss"] = decimal.Decimal(max(list_cons_loss))
+        stats["mean_cons_loss"] = decimal.Decimal(
+            sum(list_cons_loss) / len(list_cons_loss)
+            ).quantize(decimal.Decimal("1."))
 
     stats["trading_exp"] = (
         (stats["win_%"] / decimal.Decimal("100") * stats["win_mean"]) +

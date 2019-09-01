@@ -7,7 +7,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
 
-def random_forest(results_with_properties):
+def random_forest(results_with_properties, x):
     """
     Where data_ind is the ticker_data with indicator values concatenated,
     and data is results data with P & L calculations.
@@ -24,9 +24,10 @@ def random_forest(results_with_properties):
         steps=[("cat_trans", categorical_transformer),
                ("random_forest", RandomForestClassifier(n_estimators=100))])
 
-    train = results_with_properties[0:400].copy()
+    train = results_with_properties[0:x].copy()
     X_train, X_test, y_train, y_test = train_test_split(
-        train.drop("win_loss", axis=1), train["win_loss"], random_state=42)
+        train.drop("win_loss", axis=1), train["win_loss"], random_state=42,
+        shuffle=False, test_size=0.4)
 
     # Train random forest
     clf.fit(X_train, y_train)
@@ -44,10 +45,10 @@ def random_forest(results_with_properties):
         (pred_results.loc[1, 1] / pred_results[1].sum() * 100), decimals=2)
 
     # print(f"{pred_win_rate}\n")
-    if pred_win_rate < 30.:
+    if pred_win_rate < 60.:
         return None, pred_win_rate
 
-    live = results_with_properties[400:].copy()
+    live = results_with_properties[(x + 1):].copy()
     X_live = live.drop("win_loss", axis=1)
     y_live = live["win_loss"].copy()
 
