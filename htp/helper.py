@@ -1,4 +1,5 @@
 import copy
+import numpy as np
 import pandas as pd
 # import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -92,59 +93,63 @@ def main():
     instrument = "AUD_JPY"
     queryParameters = {
         "from": "2008-06-01 17:00:00", "to": "2019-08-20 17:00:00",
-        "granularity": "M15", "price": "M"}
+        "granularity": "H1", "price": "M"}
 
     data_mid = setup(
         func=func, instrument=instrument, queryParameters=queryParameters)
-
-    data_mid.to_csv("data/AUD_JPY_data_mid.csv")
+    with pd.HDFStore("data/AUD_JPY_H1.h5") as store:
+        store.append("data_mid", data_mid)
 
     queryParameters["price"] = "A"
     data_ask = setup(
         func=func, instrument=instrument, queryParameters=queryParameters)
-
-    data_ask.to_csv("data/AUD_JPY_data_ask.csv")
+    with pd.HDFStore("data/AUD_JPY_H1.h5") as store:
+        store.append("data_ask", data_ask)
 
     queryParameters["price"] = "B"
     data_bid = setup(
         func=func, instrument=instrument, queryParameters=queryParameters)
+    with pd.HDFStore("data/AUD_JPY_H1.h5") as store:
+        store.append("data_bid", data_bid)
 
-    data_bid.to_csv("data/AUD_JPY_data_bid.csv")
-
-    periods = list(range(3, 101, 1))
-
+    # periods = list(range(3, 101, 1))
+    periods = [3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 20, 24, 25, 28, 30, 32,
+               35, 36, 40, 48, 50, 60, 64, 70, 72, 80, 90, 96, 100]
     avgs = []
     for i in tqdm(periods):
         avg = indicator.smooth_moving_average(
             data_mid, column="close", period=i)
         avgs.append(avg)
     sma_x_y = pd.concat(avgs, axis=1)
-
-    sma_x_y.to_csv("data/AUD_JPY_sma_x_y.csv")
+    with pd.HDFStore("data/AUD_JPY_H1.h5") as store:
+        store.append("sma_x_y", sma_x_y)
 
     # PROPERTIES --> object: data_temp
-    print("Ichimoku Kinko Hyo")
     iky = indicator.ichimoku_kinko_hyo(data_mid)
-    iky_close = pd.concat([iky, data_mid["close"]], axis=1)
+    iky_close = pd.concat([iky[["tenkan", "kijun", "senkou_A", "senkou_B"]],
+                           data_mid["close"]], axis=1)
     iky_close["iky_cat"] = iky_close.apply(evaluate.iky_cat, axis=1)
-    print("Relative Strength Index")
+
     rsi = indicator.relative_strength_index(data_mid)
-    print("Stochastic")
+
     stoch = indicator.stochastic(data_mid)
     stoch["stoch_diff"] = stoch["%K"] - stoch["%D"]
-    print("Moving Average Convergence Divergence")
+
     macd = indicator.moving_average_convergence_divergence(data_mid)
-    print("Average Directional Movement")
+
     adx = indicator.Momentum.average_directional_movement(data_mid)
-    print("Average True Range")
+
     atr = indicator.Momentum.average_true_range(data_mid)
+
     data_properties = pd.concat(
         [iky_close["iky_cat"], rsi["RSI"], adx["ADX"],
          stoch[["%K", "%D", "stoch_diff"]], atr["ATR"],
          macd[["MACD", "Signal", "Histogram"]]], axis=1)
 
-    data_properties.to_csv("data/AUD_JPY_data_properties.csv")
+    with pd.HDFStore("data/AUD_JPY_H1.h5") as store:
+        store.append("properties", data_properties)
 
+    # to-do
     sma_close = pd.concat(
         [data_mid["close"], data_properties["ATR"], sma_x_y], axis=1)
     sma_close["close_diff"] = sma_close["close"] - sma_close["close"].shift(1)

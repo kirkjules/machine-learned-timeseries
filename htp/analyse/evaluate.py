@@ -416,7 +416,7 @@ def iky_cat(row):
     to each other.
     """
     ls = list(row.sort_values().index)
-    cat = "_".join(ls)
+    cat = "".join(ls)
     return cat
 
 
