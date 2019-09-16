@@ -340,7 +340,7 @@ def main():
     periods = [3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 20, 24, 25, 28, 30, 32,
                35, 36, 40, 48, 50, 60, 64, 70, 72, 80, 90, 96, 100]
     s = [(i, j) for i in periods for j in periods if i < (j - 1)]
-    parts = list(split(s, 8))
+    parts = list(split(s, 10))
 
     with pd.HDFStore("data/AUD_JPY_M15.h5") as store:
         data_mid = store["data_mid"]
@@ -358,7 +358,7 @@ def main():
         suffixes=("_M15", "_H1"))
     prop.fillna(method="ffill", inplace=True)
 
-    for combinations in [(12, 24)]:  # tqdm(parts[7]):  # [(66, 72), (70, 75)]
+    for combinations in tqdm(parts[0]):  # [(66, 72), (70, 75)]
         gen_signals(
             data_mid, data_entry, data_exit, data_sys, prop, extra,
             combinations)

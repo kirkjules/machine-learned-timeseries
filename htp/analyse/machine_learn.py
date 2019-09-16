@@ -91,21 +91,21 @@ class Predict:
         return search
 
 
-def predict(results_with_properties, training_size, random_search=True):
+def predict(results_with_properties, training_size, random_search=False):
 
-    print("\nFeature Selection\n")
+    # print("\nFeature Selection\n")
     all_feat_model, all_feat_X_train, all_feat_X_test, select_feat_model,\
         select_feat_X_train, select_feat_X_test, y_train, y_test = \
         Predict.feature_selection(results_with_properties, training_size)
 
-    print("\nModel Scoring\n")
+    # print("\nModel Scoring\n")
     all_feat_model_score = all_feat_model.score(all_feat_X_test, y_test)
-    print("\nAll feature model score: %.3f\n" % all_feat_model_score)
+    # print("\nAll feature model score: %.3f\n" % all_feat_model_score)
     select_feat_model_score = select_feat_model.score(
         select_feat_X_test, y_test)
-    print("\nSelect feature model score: %.3f\n" % select_feat_model_score)
+    # print("\nSelect feature model score: %.3f\n" % select_feat_model_score)
 
-    print("\nModel Assignment\n")
+    # print("\nModel Assignment\n")
     if select_feat_model_score > all_feat_model_score:
         model_score = select_feat_model_score
         model = select_feat_model
@@ -132,12 +132,12 @@ def predict(results_with_properties, training_size, random_search=True):
             print("\nModel parameters used are:\n")
             pprint(model["random_forest"].get_params())
 
-    print("\nModel Test Evaluation\n")
+    # print("\nModel Test Evaluation\n")
     pred_test = model.predict(X_test)
     pred_results = pd.crosstab(
         y_test, pred_test, rownames=["Actual"], colnames=["Predicted"])
 
-    print(pred_results)
+    # print(pred_results)
 
     try:
         pred_win_rate = np.round(
@@ -158,7 +158,7 @@ def predict(results_with_properties, training_size, random_search=True):
     X_live = live[X_test.columns].copy()
     y_live = live["win_loss"].copy()
 
-    print("\nModel Prediction\n")
+    # print("\nModel Prediction\n")
     pred_live = model.predict(X_live)
     pred_df = pd.DataFrame(
         columns=["win_loss"], data=pred_live, index=y_live.index,

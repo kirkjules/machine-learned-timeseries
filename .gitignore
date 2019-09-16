@@ -1,4 +1,5 @@
 #.gitignore
+script.py
 iris_decision_tree
 config.ini
 workshop/
