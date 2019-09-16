@@ -2,6 +2,7 @@
 script.py
 iris_decision_tree
 config.ini
+unittests/
 workshop/
 *.h5
 *.swp
