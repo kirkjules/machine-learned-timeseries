@@ -61,7 +61,6 @@ class Predict:
 
         features = pd.Series(feature_dictionary)
         top_features = list(features.nlargest(n=10, keep="first").index)
-        # top_features.append("win_loss")
 
         X_train = p.X_train[top_features].copy()
         X_test = p.X_test[top_features].copy()
@@ -100,10 +99,8 @@ def predict(results_with_properties, training_size, random_search=False):
 
     # print("\nModel Scoring\n")
     all_feat_model_score = all_feat_model.score(all_feat_X_test, y_test)
-    # print("\nAll feature model score: %.3f\n" % all_feat_model_score)
     select_feat_model_score = select_feat_model.score(
         select_feat_X_test, y_test)
-    # print("\nSelect feature model score: %.3f\n" % select_feat_model_score)
 
     # print("\nModel Assignment\n")
     if select_feat_model_score > all_feat_model_score:
@@ -121,7 +118,6 @@ def predict(results_with_properties, training_size, random_search=False):
         print("\nRandom Search\n")
         opt_model = Predict.random_search(model, X_train, y_train)
         opt_model_score = opt_model.score(X_test, y_test)
-        print("\nRandom search model score: %.3f\n" % opt_model_score)
         if opt_model_score > model_score:
             print("\nRandom search produces better model with following "
                   "parameters:\n")
@@ -137,8 +133,6 @@ def predict(results_with_properties, training_size, random_search=False):
     pred_results = pd.crosstab(
         y_test, pred_test, rownames=["Actual"], colnames=["Predicted"])
 
-    # print(pred_results)
-
     try:
         pred_win_rate = np.round(
             (pred_results.loc[1, 1] / pred_results[1].sum() * 100), decimals=2)
@@ -153,7 +147,6 @@ def predict(results_with_properties, training_size, random_search=False):
         return None, pred_win_rate, all_feat_model_score, \
             select_feat_model_score
 
-    # print(pred_results[1].sum()) - not significant
     live = results_with_properties[training_size:].copy()
     X_live = live[X_test.columns].copy()
     y_live = live["win_loss"].copy()
