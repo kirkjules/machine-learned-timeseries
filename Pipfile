@@ -7,6 +7,8 @@ verify_ssl = true
 htp = {editable = true,path = "."}
 pytest = "*"
 ipython = "*"
+tulipy = "*"
+memory-profiler = "*"
 
 [packages]
 requests = "*"
