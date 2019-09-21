@@ -4,6 +4,7 @@ iris_decision_tree
 config.ini
 unittests/
 workshop/
+legacy_engine.py
 *.h5
 *.swp
 *.DS_Store
