@@ -1,3 +1,6 @@
-.. automodule:: htp.api.oanda 
-    :members:
+oanda module
+=============
+
+.. automodule:: htp.api.oanda
+   :members:
 

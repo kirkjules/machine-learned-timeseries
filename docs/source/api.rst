@@ -1,2 +1,5 @@
-.. automodule:: htp.api 
-    :members:
+api module
+=============
+
+.. automodule:: htp.api
+   :members:

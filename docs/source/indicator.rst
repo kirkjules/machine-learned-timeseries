@@ -1,3 +1,6 @@
-.. automodule:: htp.analyse.indicator 
-    :members:
+indicator module
+=============
+
+.. automodule:: htp.analyse.indicator
+   :members:
 
