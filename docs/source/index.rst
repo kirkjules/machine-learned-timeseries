@@ -10,7 +10,10 @@ Welcome to htp's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-
+   htp/api/__init__
+   htp/api/oanda
+   htp/api/exceptions
+   htp/analyse/indicator
 
 Indices and tables
 ==================

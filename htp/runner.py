@@ -1,145 +1,13 @@
-import copy
+# import copy
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from loguru import logger
-from decimal import Decimal
-from pprint import pprint
+# from decimal import Decimal
+# from pprint import pprint
 from htp.toolbox import calculator, workshop
 from htp.analyse import evaluate, machine_learn
-
-
-def count(trades):
-    """
-    Function to calculate trade information: P/L Pips, P/L AUD, Position Size,
-    Realised P/L.
-
-    Parameters
-    ----------
-    trades : pandas.core.frame.DataFrame
-        A pandas dataframe that contains entry and exit prices in respective
-        columns, with each row representing a individual trade.
-
-    Returns
-    -------
-    pandas.core.frame.DataFrame
-        The original parsed dataframe with appended columns contain the
-        calculated information respective to each trade.
-    """
-    AMOUNT = 1000
-    STOP = 50
-    KNOWN_RATIO = 0.01
-    RISK_PERC = 0.01
-    trades["P/L PIPS"] = trades.apply(
-        lambda x: (
-            (Decimal(x["exit_price"]) - Decimal(x["entry_price"]))
-            * Decimal("100")).quantize(Decimal(".1")), axis=1)
-    d_pos_size = {}
-    # for i in trades.iterrows():
-    for trade in trades.itertuples():
-        # trade = i[1]
-        size = calculator.base_conv_pos_size(
-            ACC_AMOUNT=AMOUNT, CONV_ASK=trade[2], STOP=STOP,
-            KNOWN_RATIO=KNOWN_RATIO, RISK_PERC=RISK_PERC)
-        profit = calculator.profit_loss(
-            ENTRY=trade[2], EXIT=trade[4],
-            POS_SIZE=size, CONV_ASK=trade[4], CNT=0)
-        AMOUNT += profit
-        d_pos_size[trade[1]] = {
-            "POS_SIZE": size, "P/L AUD": profit, "P/L REALISED": AMOUNT}
-    counting = pd.DataFrame.from_dict(d_pos_size, orient="index")
-    entry_exit_complete = trades.merge(
-        counting, how="left", left_on="entry_datetime", right_index=True,
-        validate="1:1")
-
-    return entry_exit_complete
-
-
-def count_unrealised(data_mid, trades):
-    """
-    Function to calculate trade information: P/L Pips, P/L AUD, Position Size,
-    Realised P/L.
-
-    Parameters
-    ----------
-    trades : pandas.core.frame.DataFrame
-        A pandas dataframe that contains entry and exit prices in respective
-        columns, with each row representing a individual trade.
-
-    Returns
-    -------
-    pandas.core.frame.DataFrame
-        The original parsed dataframe with appended columns contain the
-        calculated information respective to each trade.
-    """
-    AMOUNT = 1000
-    STOP = 50
-    KNOWN_RATIO = 0.01
-    RISK_PERC = 0.0025
-    trades["P/L PIPS"] = trades.apply(
-        lambda x: (
-            (Decimal(x["exit_price"]) - Decimal(x["entry_price"]))
-            * Decimal("100")).quantize(Decimal(".1")), axis=1)
-    unrealised = []
-    # {"entry_datetime": Timestamp, "entry_price": float, "exit_datetime":
-    #   timestamp, "exit_price": float, "POS_SIZE": size, "P/L PIPS": float,
-    #   "P/L AUD": float, "margin": float}
-    d = {}
-    for timestamp in tqdm(data_mid.index):
-        pips = []
-        profit = []
-        info = []
-        margin = []
-        for i in range(len(unrealised)):
-            if timestamp == unrealised[i]["exit_datetime"]:
-                trade = unrealised[i]  # .pop(i)
-                # print(trade)
-                margin.append(trade["margin"])
-                pips.append(trade["P/L PIPS"])
-                profit.append(trade["P/L AUD"])
-                info.append(f"{trade['POS_SIZE']} units on "
-                            f"{trade['entry_datetime']} @ "
-                            f"{trade['entry_price']} "
-                            f"signaled by {trade['label']}")
-
-        if len(pips) > 0:
-            if len(info) > 1:
-                pprint(info)
-            AMOUNT += float((sum(margin) + sum(profit)))
-            d[timestamp] = {
-                "P/L PIPS": sum(pips), "P/L AUD": sum(profit), "trade_info":
-                " ".join(info), "P/L REALISED": AMOUNT}
-        else:
-            d[timestamp] = {
-                "P/L PIPS": np.nan, "P/L AUD": np.nan, "trade_info": np.nan,
-                "P/L REALISED": AMOUNT}
-
-        entries = trades.loc[trades["entry_datetime"] == timestamp]
-        if len(entries) > 0:
-            for i in range(len(entries)):
-                trade = entries.iloc[i]
-                size = calculator.base_conv_pos_size(
-                    ACC_AMOUNT=AMOUNT, CONV_ASK=trade["entry_price"],
-                    STOP=STOP, KNOWN_RATIO=KNOWN_RATIO, RISK_PERC=RISK_PERC)
-                profit = calculator.profit_loss(
-                    ENTRY=trade["entry_price"], EXIT=trade["exit_price"],
-                    POS_SIZE=size, CONV_ASK=trade["entry_price"], CNT=0)
-                margin = (
-                    Decimal(AMOUNT) * Decimal(0.0025)).quantize(Decimal(".01"))
-                AMOUNT -= float(margin)
-                values = {
-                    "entry_datetime": trade["entry_datetime"], "entry_price":
-                    Decimal(trade["entry_price"]).quantize(Decimal(".0001")),
-                    "exit_datetime": trade["exit_datetime"], "exit_price":
-                    Decimal(trade["exit_price"]).quantize(Decimal(".0001")),
-                    "POS_SIZE": size, "P/L AUD":
-                    profit, "P/L PIPS": trade["P/L PIPS"], "margin": margin,
-                    "label": trade["label"]}
-                unrealised.append(copy.deepcopy(values))
-
-    counting = pd.DataFrame.from_dict(d, orient="index")
-    return counting
 
 
 def gen_signals(data_mid, data_entry, data_exit, data_sys, temp_prop, extra,
@@ -249,7 +117,7 @@ def predict_signal(label, sys_signals, fast, slow, properties,
         return None
     data.reset_index(drop=True, inplace=True)
 
-    results = count(data)
+    results = calculator.count(data)
     performance = calculator.performance_stats(results[0:train_sample_size])
 
     if performance["win_%"] < 20.:
@@ -293,7 +161,7 @@ def predict_signal(label, sys_signals, fast, slow, properties,
             prediction_en_ex_prop.reset_index(drop=True, inplace=True)
 
             try:
-                prediction_results = count(prediction_en_ex)
+                prediction_results = calculator.count(prediction_en_ex)
             except ValueError:
                 print(prediction_en_ex)
                 return None
@@ -370,7 +238,7 @@ if __name__ == "__main__":
     main()
     sys.exit()
     with pd.HDFStore("data/AUD_JPY_M15.h5") as store:
-        machine_learn_results = count_unrealised(
+        machine_learn_results = calculator.count_unrealised(
             store["data_mid"], store["predictions"])
     print(
         machine_learn_results[~machine_learn_results["P/L PIPS"].isnull()])
