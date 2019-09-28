@@ -103,7 +103,6 @@ class Signals:
     2019-08-20 17:30:00        NaN          NaN       NaN         NaN          exit
     2019-08-20 17:45:00        NaN          NaN       NaN         NaN          exit
     """
-
     def __init__(self, df_mid, df_entry, df_exit, df_sys, fast, slow,
                  trade="buy", stop_delta=0.5):
 
@@ -173,9 +172,8 @@ class Signals:
         en = False
         signal_data = {}
         logger.info(
-            f"Generating signals from "
-            f"{k.stop_loss_exit_price.iloc[0].name} to "
-            f"{k.stop_loss_exit_price.iloc[-1].name}\n")
+            f"Generating signals from {k.raw_signals.iloc[0].name} to "
+            f"{k.raw_signals.iloc[-1].name}\n")
 
         for row in tqdm(k.raw_signals.itertuples()):
             if row[5] is True and en is False:
@@ -219,13 +217,13 @@ class Signals:
         4 2008-06-04 02:00:00      100.430 2008-06-04 07:45:00    100.422
         """
         k = cls(*args, **kwargs)
-        k.raw_signals["ex_type_stop_loss_by_limit"] = k.raw_signals.apply(
+        k.raw_signals["ex_type_by_limit"] = k.raw_signals.apply(
             k._signal_stop_loss, args=("stop_loss_by_limit", k.trade), axis=1)
 
-        return k._generate_trades(k.raw_signals
-            stop_loss[
+        return k._generate_trades(
+            k.raw_signals[
                 ["entry_type", "entry_price", "exit_type", "exit_price",
-                 "stop_loss_by_limit", "ex_type_by_stop_loss_by_limit"]])
+                 "stop_loss_by_limit", "ex_type_by_limit"]])
 
     @classmethod
     def atr_stop_signals(cls, df_prop, *args, atr_multiplier=3, **kwargs):
@@ -267,7 +265,7 @@ class Signals:
         stop_loss["prev_close_1"] = stop_loss["close_x"].shift(1)
         stop_loss["prev_close_2"] = stop_loss["close_x"].shift(2)
         stop_loss["stop_loss_by_ATR"] = stop_loss.apply(
-            k._stop_loss_by_atr, args=(atr_multiplier, "buy",), axis=1)
+            k._stop_loss_by_atr, args=(atr_multiplier, k.trade,), axis=1)
         stop_loss["stop_loss_by_ATR"].fillna(method="ffill", inplace=True)
         stop_loss["ex_type_by_ATR"] = stop_loss.apply(
             k._signal_stop_loss, args=("stop_loss_by_ATR", k.trade), axis=1)
@@ -495,24 +493,23 @@ class Signals:
             A pandas dataframe with entry and exit prices and timestamps on
             corresponding rows to represent a trade.
         """
-
         d = []
         en = False
         signal_data = {}
 
         for row in df.itertuples():
-            if row[1] is True and en is False:  # 5, 'entry_type' == 'entry'
+            if row[1] is True and en is False:
                 signal_data["entry_datetime"] = row[0]
-                signal_data["entry_price"] = row[2]  # 6
+                signal_data["entry_price"] = row[2]
                 en = True
-            elif row[6] is True and en is True:  # 14, 'target_type' == 'exit'
+            elif row[6] is True and en is True:
                 signal_data["exit_datetime"] = row[0]
-                signal_data["exit_price"] = row[5]  # 9
+                signal_data["exit_price"] = row[5]
                 d.append(copy.deepcopy(signal_data))
                 en = False
-            elif row[3] is True and en is True:  # 7, 'exit_type' == 'exit'
+            elif row[3] is True and en is True:
                 signal_data["exit_datetime"] = row[0]
-                signal_data["exit_price"] = row[4]  # 8
+                signal_data["exit_price"] = row[4]
                 d.append(copy.deepcopy(signal_data))
                 en = False
 
