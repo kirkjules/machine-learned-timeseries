@@ -10,7 +10,10 @@ Welcome to htp's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-
+   api
+   oanda
+   exceptions
+   indicator
 
 Indices and tables
 ==================

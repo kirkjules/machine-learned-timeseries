@@ -16,7 +16,6 @@ class Api:
     attribute. This attribute can then be used by a class defined in a
     sub-module via inheritance.
 
-
     Parameters
     ----------
     configFile : str
@@ -34,13 +33,11 @@ class Api:
         (The default is `practise`, precising that the practise platform's API
         variables and endpoints will be used by the submodule's function(s).)
 
-
     Attributes
     ----------
     details : dict
         Stores the variables sourced from the configuration file in a
         dictionary.
-
 
     Notes
     -----
@@ -48,18 +45,13 @@ class Api:
     a specific API. It is in those respective modules' top level class where
     the parameters will be redfined appropriately.
 
-
     Examples
     --------
     >>> from htp.api import Api
     >>> from pprint import pprint
     >>> var = Api(configFile="config.yaml", api="oanda", access="practise")
-    >>> pprint(var.details)
-    {'account-id': '101-011-6215953-001',
-     'token': 'a4c4164e10bd1c4e5afb3038340c444f-'
-'a349aec867b5faed0113ed23c984193b',
-     'url': 'https://api-fxpractice.oanda.com/v3/'}
-
+    >>> print(var.details["account-id"])
+    101-011-6215953-001
     """
     def __init__(self, configFile="config.yaml", api="oanda",
                  access="practise"):

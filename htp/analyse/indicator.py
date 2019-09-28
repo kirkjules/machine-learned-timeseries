@@ -15,12 +15,12 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
     Parameters
     ----------
     df1 : pandas.core.frame.DataFrame
-        The dataframe from the given column will be specified to use when
-        calculating the rolling mean.
+        A dataframe containing a column label matching the `column` keyword
+        variable.
     df2 : pandas.core.frame.DataFrame
         An optional second dataframe on which to concatenate the generated
-        rolling mean. Used when an existing indicator dataframe has been
-        started.
+        rolling mean dataframe. Used when an existing indicator dataframe has
+        been created. Both dataframe should posess the same index.
     column : str
         The column name in df1 on which to calculate the rolling mean.
     period : int
@@ -39,10 +39,8 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
     Examples
     --------
     >>> import pandas as pd
-    >>> from htp.api.oanda import Candles
-    >>> arguments = {"from": "2018-02-05T22:00:00.000000000Z",
-    ...              "granularity": "H1", "smooth": True, "count": 200}
-    >>> data = Candles.to_df(instrument="AUD_JPY", queryParameters=arguments)
+    >>> with pd.HDFStore("data/AUD_JPY_M15.h5") as store:
+    ...     data = store["data_mid"]
     >>> avgs = []
     >>> for i in [3, 6, 12, 24]:
     ...     avg = smooth_moving_average(data, column="close", period=i)
@@ -50,11 +48,12 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
     >>> pd.set_option("display.max_columns", 6)
     >>> pd.concat(avgs, axis=1).tail()
                          close_sma_3  close_sma_6  close_sma_12  close_sma_24
-    2018-02-16 01:00:00       84.301       84.295        84.271        84.415
-    2018-02-16 02:00:00       84.335       84.318        84.271        84.413
-    2018-02-16 03:00:00       84.367       84.338        84.315        84.408
-    2018-02-16 04:00:00       84.341       84.321        84.322        84.394
-    2018-02-16 05:00:00       84.324       84.330        84.313        84.384
+    timestamp
+    2019-08-20 19:45:00       72.009       72.023        72.034        72.062
+    2019-08-20 20:00:00       71.999       72.017        72.030        72.057
+    2019-08-20 20:15:00       72.001       72.015        72.026        72.052
+    2019-08-20 20:30:00       71.998       72.004        72.019        72.047
+    2019-08-20 20:45:00       71.997       71.998        72.016        72.043
     """
     rn = abs(Decimal(str(df1.iloc[0, 3])).as_tuple().exponent)
     sma = df1[column].rolling(period).mean().round(rn).to_frame(
@@ -64,7 +63,7 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
         out = pd.concat([sma, df2], axis=1)
         return out
 
-    return sma
+    return sma.round(4)
 
 
 def ichimoku_kinko_hyo(data, conv=9, base=26, lead=52):
@@ -76,20 +75,17 @@ def ichimoku_kinko_hyo(data, conv=9, base=26, lead=52):
     data : pandas.core.frame.DataFrame
         The dataframe that contains the timeseries open, high, low, close data
         for a given ticker.
-
     conv : int
         The window range used to calculate the tenkan sen signal.
-
     base : int
         The window range used to calculate the kijun sen signal.
-
     lead : int
         The window range used to calculate the senkou B signal.
 
     Returns
     -------
     pandas.core.frame.DataFrame
-        A dataframe with identical timeseries index to parsed `data`, with
+        A dataframe with identical timeseries index to input `data`, with
         columns respective to each signal that makes up the ichimoku kinko hyo
         indicator set.
 
@@ -105,6 +101,20 @@ def ichimoku_kinko_hyo(data, conv=9, base=26, lead=52):
     calculated by averaging the Tenkan Sen and the Kijun Sen and plotting 26 \
     periods ahead. Lead B is calculated by averaging the highest high and \
     lowest low for the past 52 periods and plotting 26 periods ahead.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> with pd.HDFStore("data/AUD_JPY_M15.h5") as store:
+    ...     data = store["data_mid"]
+    >>> ichimoku_kinko_hyo(data).tail()
+                          tenkan    kijun  chikou  senkou_A  senkou_B
+    timestamp
+    2019-08-20 19:45:00  72.0240  72.0680     NaN   72.0515   72.1505
+    2019-08-20 20:00:00  72.0225  72.1005     NaN   72.0340   72.1345
+    2019-08-20 20:15:00  72.0225  72.0915     NaN   72.0680   72.1345
+    2019-08-20 20:30:00  72.0210  72.0720     NaN   72.0680   72.1345
+    2019-08-20 20:45:00  72.0125  72.0530     NaN   72.0680   72.1345
     """
 
     CH = data["high"].rolling(conv).max().to_frame(name="CH")
@@ -131,7 +141,8 @@ def ichimoku_kinko_hyo(data, conv=9, base=26, lead=52):
         L, left_index=True, right_index=True).mean(
             1).shift(26).to_frame(name="senkou_B")
 
-    return pd.concat([tenkan, kijun, chikou, senkou_A, senkou_B], axis=1)
+    return pd.concat([tenkan, kijun, chikou, senkou_A, senkou_B],
+                     axis=1).round(4)
 
 
 def relative_strength_index(data, period=14):
@@ -164,8 +175,8 @@ def relative_strength_index(data, period=14):
     - Evaluates overbought (>70) and oversold (<30) conditions.
     - Rises as the number and size of positive closes increases, conversely \
     lowers as the number and size of losses increases.
-    - Indicator can remain "overbought" or "oversold" will ticker present in \
-    an up- or downtrend respectively.
+    - Indicator can remain "overbought" or "oversold" while ticker continues \
+    in an up- or downtrend respectively.
 
     References
     ----------
@@ -174,24 +185,25 @@ def relative_strength_index(data, period=14):
 
     Examples
     --------
-    >>> from htp.api.oanda import Candles
-    >>> data = Candles.to_df(
-    ...     instrument="AUD_JPY",
-    ...     queryParameters={"granularity": "H1",
-    ...                      "from": "2018-06-11T16:00:00.000000000Z",
-    ...                      "count": 2000})
+    >>> import pandas as pd
+    >>> with pd.HDFStore("data/AUD_JPY_M15.h5") as store:
+    ...     data = store["data_mid"]
     >>> relative_strength_index(data).tail()
-                         avg_gain  avg_loss        RS        RSI
-    2018-10-04 19:00:00  0.017276  0.046083  0.374887  27.266741
-    2018-10-04 20:00:00  0.022042  0.042791  0.515103  33.997907
-    2018-10-04 21:00:00  0.020467  0.043734  0.467992  31.879716
-    2018-10-04 22:00:00  0.021434  0.040611  0.527793  34.546108
-    2018-10-04 23:00:00  0.021617  0.037710  0.573253  36.437432
+                         avg_gain  avg_loss      RS      RSI
+    2019-08-20 19:45:00    0.0048    0.0101  0.4737  32.1443
+    2019-08-20 20:00:00    0.0059    0.0094  0.6255  38.4788
+    2019-08-20 20:15:00    0.0066    0.0087  0.7562  43.0585
+    2019-08-20 20:30:00    0.0061    0.0113  0.5451  35.2806
+    2019-08-20 20:45:00    0.0075    0.0105  0.7159  41.7220
     """
     close_ = pd.to_numeric(data["close"])
+    # diff() method calculates the difference of a DataFrame element compared
+    # with another element in the DataFrame, default is the element in the
+    # same column in the previous row.
     df = close_.diff().rename("Chg")
 
     s = pd.concat([close_, df], axis=1)
+    # mask() method replaces values where the condition is True.
     s["Adv"] = s["Chg"].mask(s["Chg"] < 0, 0)
     s["Decl"] = s["Chg"].mask(s["Chg"] > 0, 0).abs()
     s["AvgGain"] = s["Adv"].rolling(period).mean()
@@ -203,15 +215,15 @@ def relative_strength_index(data, period=14):
     loss = 0
     avg_gain = 0
     avg_loss = 0
-    for row in s.iterrows():
+    for row in s.itertuples():  # iterrows():
         if count == 14:
-            avg_gain = row[1]["AvgGain"]
-            avg_loss = row[1]["AvgLoss"]
+            avg_gain = row[5]  # ["AvgGain"]
+            avg_loss = row[6]  # ["AvgLoss"]
             r[row[0]] = {"avg_gain": avg_gain, "avg_loss": avg_loss,
                          "RS": (avg_gain / avg_loss)}
         elif count > 14:
-            avg_gain = ((gain * 13) + row[1]["Adv"]) / 14
-            avg_loss = ((loss * 13) + row[1]["Decl"]) / 14
+            avg_gain = ((gain * 13) + row[3]) / 14  # Adv
+            avg_loss = ((loss * 13) + row[4]) / 14  # Decl
             r[row[0]] = {"avg_gain": avg_gain, "avg_loss": avg_loss,
                          "RS": (avg_gain / avg_loss)}
         gain = avg_gain
@@ -221,7 +233,7 @@ def relative_strength_index(data, period=14):
     rs = pd.DataFrame.from_dict(r, orient="index")
     rs["RSI"] = rs.apply(lambda x: 100 - (100 / (1 + x["RS"])), axis=1)
 
-    return rs.round(3)
+    return rs.round(4)
 
 
 def stochastic(data, period=14, smoothK=1, smoothD=3):
@@ -234,9 +246,13 @@ def stochastic(data, period=14, smoothK=1, smoothD=3):
     data : pandas.core.frame.DataFrame
         The dataframe that contains the timeseries open, high, low, close data
         for a given ticker.
-
     period : int
-        The window range used to %K value.
+        The window range used to calculate the %K value.
+    smoothK : int
+        The number of periods used to smooth the %K signal line.
+    smoothD : int
+        The number of periods used to smooth the %K signal line resulting in \
+        a lagging %D signal line.
 
     Returns
     -------
@@ -249,37 +265,34 @@ def stochastic(data, period=14, smoothK=1, smoothD=3):
     - Stochastic results spot checked against Oanda values yielding slight \
     variances.
     - Momentum indicator that compares a given closing price to a range of \
-    prices over stated time period.
-    - Theory predicates on the assumption that closing prices should close \
-    near the same direction as the current trend.
+    prices over a given time frame.
+    - Theory assumes that closing prices should close near the same direction \
+    as the current trend.
     - Overbought/Oversold: primary signal generated.
         - Default thresholds are overbought @ >80 and oversold @ <20.
         - Best to trade with the trend when identifyng Stochastic overbought \
         & oversold levels, as overbought does not always mean a bearish move \
         ahead and vice versa.
         - I.e. wait for the trend to reverse and confirm with overbought/ \
-        oversold Stochastic signal.
+        oversold stochastic signal.
     - Divergence: occurs when movements in price are not confirmed by the \
-    Stochastic oscillator.
-        - Bullish when price records a lower low, but Stochastic records a \
+    stochastic oscillator.
+        - Bullish when price records a lower low, but stochastic records a \
         higher high. Vice versa for bearish divergence.
     - Bull/Bear setups are the inverse of divergence.
         - Bull setup when price records a lower high, but Stochastic records \
         a higher high. The setup then results in a dip in price which is a \
         bullish entry point before price rises. Opposite for bear setup.
     - Note that overbought/oversold signal are the most objective signal \
-    type, where divergence and bull/bear setups a subjective in their \
+    type, where divergence and bull/bear setups are subjective in their \
     interpretation of the chart's visual pattern. Refer to TradingView \
     documentation (www.tradingview.com/wiki/Stochastic_(STOCH)) for examples.
 
     Examples
     --------
-    >>> from htp.api.oanda import Candles
-    >>> data = Candles.to_df(
-    ...     instrument="AUD_JPY",
-    ...     queryParameters={"granularity": "H1",
-    ...                      "from": "2018-06-11T16:00:00.000000000Z",
-    ...                      "count": 2000})
+    >>> import pandas as pd
+    >>> with pd.HDFStore("data/AUD_JPY_M15.h5") as store:
+    ...     data = store["data_mid"]
     >>> stochastic(data).tail()
                           close    minN    maxN       %K       %D
     2018-10-04 19:00:00  80.562  80.381  81.088  25.6011  21.0681
@@ -309,19 +322,15 @@ def moving_average_convergence_divergence(data, fast=12, slow=26, signal=9):
     data : pandas.core.frame.DataFrame
         The dataframe that contains the timeseries open, high, low, close data
         for a given ticker.
-
     fast : int
         The window range used to calculate the fast period exponential moving
         average.
-
     slow : int
         The window range used to calculate the slow period exponential moving
         average.
-
     signal : int
         The window range used to calculate the fast-slow difference moving
         average.
-
 
     Returns
     -------
@@ -336,9 +345,9 @@ def moving_average_convergence_divergence(data, fast=12, slow=26, signal=9):
     - Used to identify momentum in a given timeseries' trend, as well as \
     direction and duration.
     - Two different indicator types, combined into one.
-    - Employs to Moving Averages with different lengths (lagging indicators), \
+    - Employs two moving qverages with different lengths (lagging indicators),\
     to identify trend direction and duration.
-    - Difference between moving averages makes up MACD line.
+    - Difference between moving averages makes up the MACD line.
     - MACD exponential moving average gives the Signal line.
     - The difference between these two lines gives a histogram that oscillates\
     above and below a centre Zero Line.
@@ -362,19 +371,17 @@ def moving_average_convergence_divergence(data, fast=12, slow=26, signal=9):
 
     Examples
     --------
-    >>> from htp.api.oanda import Candles
-    >>> data = Candles.to_df(
-    ...     instrument="AUD_JPY",
-    ...     queryParameters={"granularity": "H1",
-    ...                      "from": "2018-06-11T16:00:00.000000000Z",
-    ...                      "count": 2000})
+    >>> import pandas as pd
+    >>> with pd.HDFStore("data/AUD_JPY_M15.h5") as store:
+    ...     data = store["data_mid"]
     >>> moving_average_convergence_divergence(data).tail()
                             emaF     emaS    MACD  Signal  Histogram
-    2018-10-04 19:00:00  80.6989  80.9230 -0.2241 -0.2030    -0.0211
-    2018-10-04 20:00:00  80.6907  80.9024 -0.2117 -0.2047    -0.0070
-    2018-10-04 21:00:00  80.6752  80.8793 -0.2041 -0.2046     0.0005
-    2018-10-04 22:00:00  80.6674  80.8604 -0.1930 -0.2023     0.0093
-    2018-10-04 23:00:00  80.6644  80.8447 -0.1803 -0.1979     0.0176
+    timestamp
+    2019-08-20 19:45:00  72.0311  72.0502 -0.0191 -0.0145    -0.0047
+    2019-08-20 20:00:00  72.0266  72.0466 -0.0200 -0.0156    -0.0044
+    2019-08-20 20:15:00  72.0253  72.0445 -0.0192 -0.0163    -0.0029
+    2019-08-20 20:30:00  72.0174  72.0393 -0.0219 -0.0174    -0.0045
+    2019-08-20 20:45:00  72.0146  72.0363 -0.0217 -0.0183    -0.0035
     """
 
     emaF = data["close"].ewm(
@@ -397,16 +404,14 @@ class Momentum:
 
     The class instantiates with the ATR pre-generated. The ADX can then be
     called as a class method. As both indicators were conceived and defined
-    by Wilder, smoothing calculation also follow Wilder's directions. Here,
-    the class outlines both of Wilder's smoothing techniques as they are
-    applied in the ATR and ADX calculation.
+    by Wilder, smoothing calculations also follow Wilder's directions. These
+    calculations are defined within the class as internal functions.
 
     Parameters
     ----------
     data : pandas.core.frame.DataFrame
         The dataframe that contains the timeseries open, high, low, close data
         for a given ticker.
-
     period : int
         The window range used for number both the ATR, ADX and Wilder smoothing
         calculations.
@@ -416,18 +421,14 @@ class Momentum:
     high : pandas.Series
         Returns the `high` column from the parsed dataset with values converted
         to np.float38.
-
     low : pandas.Series
         Returns the `low` column from the parsed dataset with values converted
         to np.float38.
-
     close : pandas.Series
         Returns the `close` column from the parsed dataset with values
         converted to np.float38.
-
     atr : pandas.core.frame.DataFrame
         Returns a dataframe with `HL`, `HpC`, `LpC`, `TR` and `ATR` columns.
-
     period : int
         Returns the parsed period parameter.
 
@@ -445,11 +446,11 @@ class Momentum:
     - ATR basic interpretation is the higher the value, the higher the \
     volatility.
     - ATR used to measure a move's strength.
-        - Where a ticker moves or reverses in a bullish or bearish direction \
+        - When a ticker moves or reverses in a bullish or bearish direction \
         this is usually accompanied by increased volatility. --> The more \
         volatility in a large move, the more interest or pressure there is \
         reinforcing that move.
-        - Where a ticker is trading sideways the volatility is relatively low.
+        - When a ticker is trading sideways the volatility is relatively low.
     - ADX indicates trend strength.
         - Wilder believed that ADX > 25 indicated a strong trend, while < 20 \
         indicated a weak or non-trend.
@@ -465,26 +466,24 @@ class Momentum:
 
     Examples
     --------
-    >>> from htp.api.oanda import Candles
-    >>> data = Candles.to_df(
-    ...     instrument="AUD_JPY",
-    ...     queryParameters={"granularity": "H1",
-    ...                      "from": "2018-06-11T16:00:00.000000000Z",
-    ...                      "count": 2000})
+    >>> import pandas as pd
+    >>> with pd.HDFStore("data/AUD_JPY_M15.h5") as store:
+    ...     data = store["data_mid"]
     >>> Momentum.average_true_range(data).tail()
-                            HL    HpC    LpC     TR     r14TR       ATR
-    2018-10-04 19:00:00  0.092  0.030  0.062  0.092  0.166643  0.152344
-    2018-10-04 20:00:00  0.114  0.096  0.018  0.114  0.162786  0.149605
-    2018-10-04 21:00:00  0.051  0.018  0.069  0.069  0.152286  0.143848
-    2018-10-04 22:00:00  0.064  0.061  0.003  0.064  0.142000  0.138144
-    2018-10-04 23:00:00  0.117  0.061  0.056  0.117  0.138357  0.136634
+                            HL    HpC    LpC     TR   r14TR     ATR
+    timestamp
+    2019-08-20 19:45:00  0.043  0.010  0.033  0.043  0.0345  0.0438
+    2019-08-20 20:00:00  0.031  0.026  0.005  0.031  0.0329  0.0429
+    2019-08-20 20:15:00  0.024  0.016  0.008  0.024  0.0322  0.0415
+    2019-08-20 20:30:00  0.044  0.000  0.044  0.044  0.0339  0.0417
+    2019-08-20 20:45:00  0.051  0.034  0.017  0.051  0.0356  0.0424
     >>> Momentum.average_directional_movement(data).tail()
-                          +DM14   -DM14    TR14      +DI      -DI       DX      ADX
-    2018-10-04 19:00:00  0.1609  0.6406  2.1328   7.5458  30.0354  59.8425  55.9301
-    2018-10-04 20:00:00  0.2254  0.5948  2.0945  10.7637  28.4006  45.0330  55.1518
-    2018-10-04 21:00:00  0.2093  0.5524  2.0139  10.3949  27.4275  45.0330  54.4290
-    2018-10-04 22:00:00  0.2174  0.5129  1.9340  11.2402  26.5199  40.4652  53.4316
-    2018-10-04 23:00:00  0.2359  0.4763  1.9129  12.3301  24.8978  33.7588  52.0264
+                             +DI      -DI       DX      ADX
+    2019-08-20 19:45:00  14.2501  24.6096  26.6587  17.3978
+    2019-08-20 20:00:00  13.5141  23.8383  27.6401  18.1294
+    2019-08-20 20:15:00  14.6763  22.8542  21.7899  18.3909
+    2019-08-20 20:30:00  13.5702  24.5575  28.8170  19.1356
+    2019-08-20 20:45:00  12.4034  25.3121  34.2267  20.2136
     """
 
     def __init__(self, data, period=14):
@@ -506,7 +505,7 @@ class Momentum:
 
         atr = tr.merge(
             ATR, how="left", left_index=True, right_index=True, validate="1:1")
-        self.atr = atr
+        self.atr = atr.round(4)
         self.period = period
 
     def _wilder_average_a(self, df, column, length):
@@ -516,12 +515,15 @@ class Momentum:
         prevX = 0
         count = 0
         df[f"r{length}{column}"] = df[column].rolling(length).mean()
-        for row in df.iterrows():
+        col_ind = ([i for i in df.columns].index(column) + 1)
+        col_mean_ind = ([
+            i for i in df.columns].index(f"r{length}{column}") + 1)
+        for row in df.itertuples():
             if count == length:
-                X = row[1][f"r{length}{column}"]
+                X = row[col_mean_ind]  # [f"r{length}{column}"]
                 d[row[0]] = X
             elif count > length:
-                X = (prevX * (length - 1) + row[1][column]) / length
+                X = (prevX * (length - 1) + row[col_ind]) / length  # [column]
                 d[row[0]] = X
             prevX = X
             count += 1
@@ -535,12 +537,15 @@ class Momentum:
         prevX = 0
         count = 0
         df[f"r{length}{column}"] = df[column].rolling(length).sum()
-        for row in df.iterrows():
+        col_ind = ([i for i in df.columns].index(column) + 1)
+        col_mean_ind = (
+            [i for i in df.columns].index(f"r{length}{column}") + 1)
+        for row in df.itertuples():
             if count == length:
-                X = row[1][f"r{length}{column}"]
+                X = row[col_mean_ind]  # [f"r{length}{column}"]
                 d[row[0]] = X
             elif count > length:
-                X = prevX - (prevX / length) + row[1][column]
+                X = prevX - (prevX / length) + row[col_ind]  # [column]
                 d[row[0]] = X
             prevX = X
             count += 1
@@ -552,7 +557,7 @@ class Momentum:
         return cls(*args, **kwargs).atr
 
     def _ADX_DM_logic(self, row, colA, colB):
-
+        # not optimised
         if row[colA] > row[colB] and row[colA] > 0:
             return row[colA]
         else:
@@ -593,7 +598,7 @@ class Momentum:
             (DI["+DI"] + DI["-DI"]).abs() *\
             100
 
-        adx_copy = DI.iloc[:].copy(deep=True)
+        adx_copy = DI.copy(deep=True)
         adx_dict = n._wilder_average_a(adx_copy, "DX", n.period)
         adx_frame = pd.DataFrame.from_dict(
             adx_dict, orient="index").rename(columns={0: "ADX"})
@@ -601,7 +606,7 @@ class Momentum:
             adx_frame, how="left", left_index=True, right_index=True,
             validate="1:1")
 
-        return ADX.round(4)
+        return ADX[["+DI", "-DI", "DX", "ADX"]].round(4)
 
 
 if __name__ == "__main__":
