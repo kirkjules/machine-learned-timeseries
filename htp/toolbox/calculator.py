@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pprint import pprint
-from decimal import Decimal, ROUND_UP, ROUND_HALF_EVEN, ROUND_DOWN
+from decimal import Decimal, ROUND_HALF_EVEN, ROUND_DOWN, InvalidOperation
 
 
 ticker_conversion_pairs = {
@@ -50,7 +50,7 @@ def std_dec(func):
         A position size in arbitary units defined as a Decimal object.
     """
     @functools.wraps(func)
-    def wrapper(**kwargs):
+    def wrapper(*args, **kwargs):
         """
         The internal wrapper that actions input conversion to Decimal objects.
 
@@ -66,9 +66,12 @@ def std_dec(func):
         """
         decimal_kwargs = {}
         for kwarg in kwargs:
-            decimal_kwargs[kwarg] = Decimal(kwargs[kwarg])
+            try:
+                decimal_kwargs[kwarg] = Decimal(kwargs[kwarg])
+            except InvalidOperation:
+                decimal_kwargs[kwarg] = kwargs[kwarg]
 
-        return func(**decimal_kwargs)
+        return func(*args, **decimal_kwargs)
 
     return wrapper
 
@@ -95,48 +98,75 @@ class Position:
         RISK_PERC : float
             The percentage of the account in decimal format that will be risked
             on this trade.
+
+        Attributes
+        ----------
+        ticker : str
+            The symbol label being traded.
+        MAX_RISK_ACC_CURR : decimal.Decimal
+            The maximum amount in the account denomination that is being risked
+            on the given trade.
+        KNOWN_RATIO : float
+            The known unit to pip ratio for the traded ticker.
         """
         self.ticker = ticker
         self.MAX_RISK_ACC_CURR = Decimal(ACC_AMOUNT) * Decimal(RISK_PERC)
+        self.KNOWN_RATIO = 0.0001
+        if ticker.split("_")[1] == "JPY":
+            self.KNOWN_RATIO = 0.01
 
-    def which_calculator(cls, *args, acc_denomination="AUD", **kwargs):
+    def calculator(cls, *args, acc_denomination="AUD", **kwargs):
         """
         A function to select the appropriate position size calculator based on
         ticker traded and account denomination.
-        
+
         Parameters
         ----------
         acc_denomination : str {'AUD'}
             The currency of funds held in the trading account.
+
+        Returns
+        -------
+        The appropriate class function to calculate position size depending
+        on the symbol that is to be traded.
         """
         ticker = cls.ticker
-        
+
         if acc_denomination in ticker.split("_")[1]:
             return cls.acc_is_counter_traded
-        
+
         elif acc_denomination in ticker.split("_")[0]:
             return cls.acc_is_base_traded
-        
+
         elif acc_denomination in ticker_conversion_pairs[ticker].split("_")[1]:
             return cls.acc_is_counter_conversion
-        
+
         elif acc_denomination in ticker_conversion_pairs[ticker].split("_")[0]:
             return cls.acc_is_base_conversion
 
     @classmethod
-    def acc_is_counter_traded(cls, *args, STOP=100, KNOWN_RATIO=0.0001, **kwargs):
+    def size(cls, *args, CONV=None, **kwargs):
+        """
+        General function that selects the appropriate calculator based on the
+        ticker traded and the account denomination before enacting that
+        function to calculate position size.
+        """
+        calc = cls(*args, **kwargs)
+        func = calc.calculator()
+        return func(*args, CONV=CONV, **kwargs)
+
+    @classmethod
+    def acc_is_counter_traded(cls, *args, STOP=100, **kwargs):
         """
         A position size calculator to use when the account currency
         denomination is the same as the counter currency (denominator) of the
         traded ticker.
-        
+
         Paramaters
         ----------
         STOP : float
             The number of pips between the entry price and the stop loss exit
             price.
-        KNOWN_RATIO : float
-            The known unit to pip ratio for the traded ticker.
 
         Returns
         ------
@@ -153,13 +183,13 @@ class Position:
 
         VALUE_PER_PIP = risk.MAX_RISK_ACC_CURR / Decimal(STOP)
 
-        POSITION_SIZE = VALUE_PER_PIP * (Decimal(1) / Decimal(KNOWN_RATIO))
+        POSITION_SIZE = VALUE_PER_PIP * (Decimal(1) /
+                                         Decimal(risk.KNOWN_RATIO))
 
         return POSITION_SIZE.quantize(Decimal(1.), rounding=ROUND_DOWN)
 
     @classmethod
-    def acc_is_base_traded(cls, *args, STOP=100, KNOWN_RATIO=0.0001,
-                           TARGET_ASK=1., **kwargs):
+    def acc_is_base_traded(cls, *args, STOP=100, CONV=1., **kwargs):
         """
         A position size calculator to use when the account currency
         denomination is the same as the base currency (nominator) of the traded
@@ -170,9 +200,7 @@ class Position:
         STOP : float
             The number of pips between the entry price and the stop loss exit
             price.
-        KNOWN_RATIO : float
-            The known unit to pip ratio for the traded ticker.
-        TARGET_ASK : float
+        CONV : float
             The asking price for the traded ticker at present.
 
         Returns
@@ -182,39 +210,39 @@ class Position:
 
         Examples
         --------
-        >>> pos_size = Position.acc_is_base_traded("AUD_JPY", 1000, 0.01)
+        >>> pos_size = Position.acc_is_base_traded(
+        ...     "AUD_JPY", 1000, 0.01, STOP=50, CONV=78.5)
         >>> print(pos_size)
-        1000
+        1570
         """
         risk = cls(*args, **kwargs)
-        
-        MAX_RISK_CNT_CURR = risk.MAX_RISK_ACC_CURR * Decimal(TARGET_ASK)
+
+        MAX_RISK_CNT_CURR = risk.MAX_RISK_ACC_CURR * Decimal(CONV)
 
         VALUE_PER_PIP = MAX_RISK_CNT_CURR / Decimal(STOP)
 
-        POSITION_SIZE = VALUE_PER_PIP * (Decimal(1) / Decimal(KNOWN_RATIO))
+        POSITION_SIZE = VALUE_PER_PIP * (Decimal(1) /
+                                         Decimal(risk.KNOWN_RATIO))
 
         return POSITION_SIZE.quantize(Decimal(1.), rounding=ROUND_DOWN)
 
     @classmethod
-    def acc_is_counter_conversion(cls, *args, STOP=100, KNOWN_RATIO=0.0001,
-                                  CONV_ASK=1., **kwargs):
+    def acc_is_counter_conversion(cls, *args, STOP=100, CONV=1., **kwargs):
         """
-        A position size calculator to use when the account currency denomination is
-        the same as the counter currency (denominator) of the conversion pair.
+        A position size calculator to use when the account currency
+        denomination is the same as the counter currency (denominator) of the
+        conversion pair.
 
-        The conversion pair is used to convert the risk calculated in the account
-        currency, across to the target pair's counter currency.
+        The conversion pair is used to convert the risk calculated in the
+        account currency, across to the target pair's counter currency.
 
         Parameters
         ----------
         STOP : float
             The number of pips between the entry price and the stop loss exit
             price.
-        KNOWN_RATIO : float
-            The known unit to pip ratio for the traded ticker.
-        CONV_ASK : float
-            The asking price for the conversion ticker at present.
+        CONV : float
+            The bid price for the conversion ticker at present.
 
         Returns
         ------
@@ -223,40 +251,41 @@ class Position:
 
         Examples
         --------
-        >>> pos_size = Position.acc_is_counter_conversion("AUD_JPY", 1000, 0.01) 
+        >>> # CONV_ASK is current GBP_AUD bid price
+        >>> pos_size = Position.acc_is_counter_conversion(
+        ...     "EUR_GBP", 1000, 0.01, STOP=50, CONV=1.82)
         >>> print(pos_size)
-        1000
+        1098
         """
         risk = cls(*args, **kwargs)
 
         MAX_RISK_TARGET_CNT = risk.MAX_RISK_ACC_CURR * \
-                (Decimal(1) / Decimal(CONV_ASK))
+            (Decimal(1) / Decimal(CONV))
 
         VALUE_PER_PIP = MAX_RISK_TARGET_CNT / Decimal(STOP)
 
-        POSITION_SIZE = VALUE_PER_PIP * (Decimal(1) / Decimal(KNOWN_RATIO))
+        POSITION_SIZE = VALUE_PER_PIP * (Decimal(1) /
+                                         Decimal(risk.KNOWN_RATIO))
 
         return POSITION_SIZE.quantize(Decimal(1.), rounding=ROUND_DOWN)
 
     @classmethod
-    def acc_is_base_conversion(cls, *args, STOP=100, KNOWN_RATIO=0.0001,
-                                  CONV_ASK=1., **kwargs):
+    def acc_is_base_conversion(cls, *args, STOP=100, CONV=1., **kwargs):
         """
-        A position size calculator to use when the account currency denomination is
-        the same as the base currency (nominator) of the conversion pair.
+        A position size calculator to use when the account currency
+        denomination is the same as the base currency (nominator) of the
+        conversion pair.
 
-        The conversion pair is used to convert the risk calculated in the account
-        currency, across to the target pair's counter currency.
+        The conversion pair is used to convert the risk calculated in the
+        account currency, across to the target pair's counter currency.
 
         Parameters
         ----------
-        CONV_ASK : float
+        CONV : float
             The asking price for the conversion ticker at present.
         STOP : float
             The number of pips between the entry price and the stop loss exit
             price.
-        KNOWN_RATIO : float
-            The known unit to pip ratio for the traded ticker.
 
         Returns
         ------
@@ -265,52 +294,46 @@ class Position:
 
         Examples
         --------
-        >>> pos_size = Position.acc_is_base_conversion("AUD_JPY", 1000, 0.01)
+        >>> # CONV_ASK is the current AUD_JPY ask price
+        >>> pos_size = Position.acc_is_base_conversion(
+        ...     "CAD_JPY", 1000, 0.01, STOP=50, CONV_ASK=86.25)
         >>> print(pos_size)
-        1000
+        1725
         """
         risk = cls(*args, **kwargs)
 
-        MAX_RISK_TARGET_CNT = risk.MAX_RISK_ACC_CURR * Decimal(CONV_ASK)
+        MAX_RISK_TARGET_CNT = risk.MAX_RISK_ACC_CURR * Decimal(CONV)
 
         VALUE_PER_PIP = MAX_RISK_TARGET_CNT / Decimal(STOP)
 
-        POSITION_SIZE = VALUE_PER_PIP * (Decimal(1) / Decimal(KNOWN_RATIO))
+        POSITION_SIZE = VALUE_PER_PIP * (Decimal(1) /
+                                         Decimal(risk.KNOWN_RATIO))
 
         return POSITION_SIZE.quantize(Decimal(1.), rounding=ROUND_DOWN)
 
-    @classmethod
-    def size(cls, *args, CONV_ASK=None, **kwargs):
-        """
-        General function that selects the appropriate calculator based on the
-        ticker traded and the account denomination before enacting that
-        function to calculate position size.
-        """
-        calc = cls(*args, **kwargs)
-        func = calc.which_calculator()
-        return func(*args, CONV_ASK=CONV_ASK, **kwargs)
-
 
 @std_dec
-def profit_loss(ENTRY=1.0, EXIT=1.1, POS_SIZE=2500, CONV_ASK=1.0, CNT=1):
+def profit_loss(ticker, ENTRY=1.0, EXIT=1.1, POS_SIZE=2500, CONV=1.0,
+                TRADE="buy"):
     """
-    Profit and loss calculator for buy trades.
+    Profit and loss calculator.
 
     Parameters
     ----------
+    ticker : str
+        Symbol being traded.
     ENTRY : float
         The trade's entry price.
     EXIT : float
         The trade's exit price.
     POS_SIZE : int
         The trade's position size in units.
-    CONV_ASK : float
-        The asking price at time of exit for the conversion pair. The
-        conversion pair is defined by the account denomination against the
-        traded pair counter currency.
-    CNT :  {0, 1}
-        Either 0 or 1, to denote whether the account denomination is either
-        the base (0) or the counter (1) currency in the conversion pair.
+    CONV : float
+        The price at time of exit for the conversion pair. The conversion pair
+        is defined by the account denomination against the traded pair counter
+        currency.
+    TRADE : {'buy', 'sell'}
+        Informs on trade direction for profit to be properly recognised.
 
     Returns
     -------
@@ -320,19 +343,30 @@ def profit_loss(ENTRY=1.0, EXIT=1.1, POS_SIZE=2500, CONV_ASK=1.0, CNT=1):
     Examples
     --------
     >>> profit_loss_amount = profit_loss(
-    ...     ENTRY=2.1443, EXIT=2.1452, POS_SIZE=1000, CONV_ASK=1.1025, CNT=1)
+    ...     "AUD_JPY", ENTRY=75, EXIT=70, POS_SIZE=1500, CONV=70, TRADE="sell")
     >>> print(profit_loss_amount)
-    0.99
+    107.14
+    >>> profit_loss_amount = profit_loss(
+    ...     "EUR_GBP", ENTRY=0.89, EXIT=0.92, POS_SIZE=1098, CONV=1.82)
+    >>> print(profit_loss_amount)
+    59.95
     """
     PIP_DELTA = EXIT - ENTRY
+    if TRADE == "sell":
+        PIP_DELTA = -PIP_DELTA
 
     # Invert the conversion rate if the account denomination is not the counter
     # currency, i.e. the base currency, in the conversion pair, composed of the
     # traded counter currency against the account currency.
-    if not int(CNT):
-        CONV_ASK = (1 / CONV_ASK)
+    if "AUD" in ticker and "AUD" not in ticker.split("_")[1]:
+        CONV = (1 / CONV)
+    elif "AUD" in ticker_conversion_pairs[ticker] and\
+            "AUD" not in ticker_conversion_pairs[ticker].split("_")[1]:
+        CONV = (1 / CONV)
+    else:
+        CONV = CONV
 
-    CURR_DELTA = PIP_DELTA * CONV_ASK
+    CURR_DELTA = PIP_DELTA * CONV
 
     ACC_AMOUNT = CURR_DELTA * POS_SIZE
 
@@ -340,7 +374,7 @@ def profit_loss(ENTRY=1.0, EXIT=1.1, POS_SIZE=2500, CONV_ASK=1.0, CNT=1):
             Decimal("0.01"), rounding=ROUND_HALF_EVEN)
 
 
-def count(trades, ticker, AMOUNT, STOP, RISK_PERC):
+def count(trades, ticker, amount, RISK_PERC, trade_type):
     """
     Function to calculate trade information: P/L Pips, P/L AUD, Position Size,
     Realised P/L.
@@ -348,8 +382,9 @@ def count(trades, ticker, AMOUNT, STOP, RISK_PERC):
     Parameters
     ----------
     trades : pandas.core.frame.DataFrame
-        A pandas dataframe that contains entry and exit prices in respective
-        columns, with each row representing a individual trade.
+        A pandas dataframe that contains entry, exit and conversion prices as
+        as well as stop loss (pips) in respective columns, with each row
+        representing an individual trade.
 
     Returns
     -------
@@ -357,9 +392,7 @@ def count(trades, ticker, AMOUNT, STOP, RISK_PERC):
         The original parsed dataframe with appended columns contain the
         calculated information respective to each trade.
     """
-    AMOUNT = AMOUNT
-    STOP = STOP
-    RISK_PERC = 0.01
+    AMOUNT = amount
 
     if "JPY" in ticker:
         KNOWN_RATIO = (100, 0.01)
@@ -373,12 +406,11 @@ def count(trades, ticker, AMOUNT, STOP, RISK_PERC):
 
     d_pos_size = {}
     for trade in trades.itertuples():
-        size = base_conv_pos_size(
-            ACC_AMOUNT=AMOUNT, CONV_ASK=trade[2], STOP=STOP,
-            KNOWN_RATIO=KNOWN_RATIO[1], RISK_PERC=RISK_PERC)
+        size = Position.size(
+            ticker, AMOUNT, RISK_PERC, CONV=trade[5], STOP=trade[6])
         profit = profit_loss(
-            ENTRY=trade[2], EXIT=trade[4],
-            POS_SIZE=size, CONV_ASK=trade[4], CNT=0)
+            ticker, ENTRY=trade[2], EXIT=trade[4], POS_SIZE=size,
+            CONV=trade[5], TRADE=trade_type)
         AMOUNT += profit
         d_pos_size[trade[1]] = {
             "POS_SIZE": size, "P/L AUD": profit, "P/L REALISED": AMOUNT}
@@ -390,7 +422,7 @@ def count(trades, ticker, AMOUNT, STOP, RISK_PERC):
     return entry_exit_complete
 
 
-def count_unrealised(data_mid, trades):
+def count_unrealised(data_mid, trades, ticker, amount, RISK_PERC, CONV):
     """
     Function to calculate trade information: P/L Pips, P/L AUD, Position Size,
     Realised P/L.
@@ -398,8 +430,9 @@ def count_unrealised(data_mid, trades):
     Parameters
     ----------
     trades : pandas.core.frame.DataFrame
-        A pandas dataframe that contains entry and exit prices in respective
-        columns, with each row representing a individual trade.
+        A pandas dataframe that contains entry, exit, stop loss (pips) and
+        conversion prices in respective columns, with each row representing an
+        individual trade.
 
     Returns
     -------
@@ -407,10 +440,7 @@ def count_unrealised(data_mid, trades):
         The original parsed dataframe with appended columns contain the
         calculated information respective to each trade.
     """
-    AMOUNT = 1000
-    STOP = 50
-    KNOWN_RATIO = 0.01
-    RISK_PERC = 0.0025
+    AMOUNT = amount
     trades["P/L PIPS"] = trades.apply(
         lambda x: (
             (Decimal(x["exit_price"]) - Decimal(x["entry_price"]))
@@ -453,12 +483,12 @@ def count_unrealised(data_mid, trades):
         if len(entries) > 0:
             for i in range(len(entries)):
                 trade = entries.iloc[i]
-                size = base_conv_pos_size(
-                    ACC_AMOUNT=AMOUNT, CONV_ASK=trade["entry_price"],
-                    STOP=STOP, KNOWN_RATIO=KNOWN_RATIO, RISK_PERC=RISK_PERC)
+                size = Position.size(
+                    ticker, AMOUNT, RISK_PERC, CONV=entries[5],
+                    STOP=entries[6])
                 profit = profit_loss(
                     ENTRY=trade["entry_price"], EXIT=trade["exit_price"],
-                    POS_SIZE=size, CONV_ASK=trade["entry_price"], CNT=0)
+                    POS_SIZE=size, CONV=entries[CONV], CNT=0)
                 margin = (
                     Decimal(AMOUNT) * Decimal(0.0025)).quantize(Decimal(".01"))
                 AMOUNT -= float(margin)
