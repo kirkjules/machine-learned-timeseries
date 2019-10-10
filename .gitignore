@@ -5,6 +5,7 @@ config.ini
 unittests/
 workshop/
 legacy_engine.py
+*.rdb
 *.h5
 *.swp
 *.DS_Store

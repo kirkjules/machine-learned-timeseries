@@ -1,13 +1,64 @@
-# import copy
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from loguru import logger
-# from decimal import Decimal
-# from pprint import pprint
 from htp.toolbox import calculator, workshop
 from htp.analyse import evaluate, machine_learn
+
+
+def data_load(ticker, target_interval, supplementary_interval, entry, exit):
+
+    # load the pre-processed data into memory from pytables.
+    with pd.HDFStore(f"data/{ticker}_{target_interval}.h5") as store:
+
+        exit = store[exit]
+        entry = store[entry]
+        price = store["mid"]
+        system = store["sma"]
+        observations = store["observations"]
+        target_indicators = store["indicators"]
+
+    with pd.HDFStore(f"data/{ticker}_{supplementary_interval}.h5") as store:
+
+        supplementary_indicators = store["indicators"]
+
+    # action some final data prep.
+    properties = target_indicators.merge(
+        supplementary_indicators, how="left", left_index=True,
+        right_index=True, suffixes=(f"_{target_interval}",
+                                    f"_{supplementary_interval}"))
+    properties.fillna(method="ffill", inplace=True)
+
+    return price, entry, exit, system, properties, observations
+
+
+def main(ticker, target_interval, supplementary_interval, entry, exit):
+    """
+    A function the actions a cascading string of processes.
+    """
+    pd.set_option("display.max_columns", 35)
+    pd.set_option('max_colwidth', 150)
+    pd.set_option("display.max_rows", 50)
+
+    # state all sma signals that have been previously calculated.
+    periods = [3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 20, 24, 25, 28, 30, 32,
+               35, 36, 40, 48, 50, 60, 64, 70, 72, 80, 90, 96, 100]
+    # define the signal pairs according to a stated logic where the faster
+    # moving signal is the first item in a tuple and the slower moving signal
+    # is the second item in the tuple.
+    s = [(i, j) for i in periods for j in periods if i < (j - 1)]
+    # if running the analysis locally, it recommend to split the list into
+    # parts to process separately.
+    parts = list(split(s, 10))
+
+    # load the pre-processed data into memory from pytables.
+    price, entry, exit, system, properties, observations = data_load(
+        ticker, target_interval, supplementary_interval, entry, exit)
+    # call a processing function against each tuple item in the list.
+    for combinations in tqdm(parts[0]):  # [(66, 72), (70, 75)]
+        gen_signals(
+            price, entry, exit, system, properties, observations, combinations)
 
 
 def gen_signals(data_mid, data_entry, data_exit, data_sys, temp_prop, extra,
@@ -196,40 +247,6 @@ def predict_signal(label, sys_signals, fast, slow, properties,
 def split(a, n):
     k, m = divmod(len(a), n)
     return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
-
-
-def main():
-
-    pd.set_option("display.max_columns", 35)
-    pd.set_option('max_colwidth', 150)
-    pd.set_option("display.max_rows", 50)
-
-    # periods = list(range(3, 101, 1))
-    periods = [3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 20, 24, 25, 28, 30, 32,
-               35, 36, 40, 48, 50, 60, 64, 70, 72, 80, 90, 96, 100]
-    s = [(i, j) for i in periods for j in periods if i < (j - 1)]
-    parts = list(split(s, 10))
-
-    with pd.HDFStore("data/AUD_JPY_M15.h5") as store:
-        data_mid = store["data_mid"]
-        data_entry = store["data_ask"]
-        data_exit = store["data_bid"]
-        data_sys = store["sma_x_y"]
-        prop_M15 = store["properties"]
-        extra = store["properties_extra"]
-
-    with pd.HDFStore("data/AUD_JPY_H1.h5") as store:
-        prop_H1 = store["properties"]
-
-    prop = prop_M15.merge(
-        prop_H1, how="left", left_index=True, right_index=True,
-        suffixes=("_M15", "_H1"))
-    prop.fillna(method="ffill", inplace=True)
-
-    for combinations in tqdm(parts[0]):  # [(66, 72), (70, 75)]
-        gen_signals(
-            data_mid, data_entry, data_exit, data_sys, prop, extra,
-            combinations)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,28 @@
-# import sys
+import rq
+import time
+import redis
 import multiprocessing
 from queue import Queue
 from functools import partial
 from threading import Thread, Lock
+
+
+redis_conn = redis.Redis()
+q = rq.Queue(connection=redis_conn)
+
+
+def launch_task(func, *args, **kwargs):
+    job = q.enqueue(func, *args, **kwargs)
+    print(job.get_id())
+    return job.get_id()
+
+
+def queue_completed(tasks):
+    for i in tasks:
+        while i not in rq.registry.FinishedJobRegistry(queue=q):
+            time.sleep(1)
+        print(i)
+    return True
 
 
 class Worker:
@@ -80,7 +100,8 @@ class Worker:
         self.iterable = iterable
         self.iterable_arg = iterable_arg
 
-    def seq(self):
+    @classmethod
+    def sync(cls, *args, **kwargs):
         """
         To execute the target function sequentially across the given iterable's
         elements, with the provided positional and keyword arguments.
@@ -106,8 +127,8 @@ class Worker:
         ...     queryParameters["from"] = i["from"]
         ...     queryParameters["to"] = i["to"]
         ...     date_list.append(deepcopy(queryParameters))
-        >>> d = Worker(func, "queryParameters", iterable=date_list,
-        ...     instrument=instrument).seq()
+        >>> d = Worker.sync(func, "queryParameters", iterable=date_list,
+        ...     instrument=instrument)
         >>> print(d[1].head())
                                open    high     low   close
         2019-06-02 21:00:00  75.068  75.487  74.968  75.401
@@ -116,9 +137,10 @@ class Worker:
         2019-06-05 21:00:00  75.594  75.776  75.280  75.628
         2019-06-06 21:00:00  75.632  75.817  75.492  75.738
         """
+        k = cls(*args, **kwargs)
         st = []
-        for i in iter(self.iterable):
-            st.append(self.func(**{self.iterable_arg: i}))
+        for i in iter(k.iterable):
+            st.append(k.func(**{k.iterable_arg: i}))
 
         return st
 
@@ -202,7 +224,7 @@ class ConcurrentWorker(Worker):
         return results
 
 
-class ParallelWorker(Worker):
+class Parallel(Worker):
     """
     Class that inherit from `Worker` and subsequently provides parallel
     processing functionality to a target function.
@@ -237,7 +259,8 @@ class ParallelWorker(Worker):
         """
         return func(**{k: iterable})
 
-    def prl(self, lock_func=None, lock_arg=None):
+    @classmethod
+    def worker(cls, *args, lock_func=None, lock_arg=None, **kwargs):
         """
         Method to run target function in parallel. The pool of workers is
         initialised with a lock that is used for logging in the target
@@ -249,15 +272,16 @@ class ParallelWorker(Worker):
             A list of elements, each the respective result of the target
             function working on a given value present in the iterable.
         """
+        k = cls(*args, **kwargs)
         if lock_func is None:
-            lock_func = self._init_lock
+            lock_func = k._init_lock
             lock_arg = multiprocessing.Lock()
 
         pool = multiprocessing.Pool(
             processes=3, initializer=lock_func, initargs=(lock_arg,))
         results = []
-        for i in pool.map(partial(self._arg_kw, self.func, self.iterable_arg),
-                          self.iterable):
+        for i in pool.map(partial(k._arg_kw, k.func, k.iterable_arg),
+                          k.iterable):
             results.append(i)
 
         pool.close()
@@ -268,7 +292,6 @@ class ParallelWorker(Worker):
 
 if __name__ == "__main__":
     import os
-    import time
     import pandas as pd
     from loguru import logger
     from copy import deepcopy
@@ -296,9 +319,9 @@ if __name__ == "__main__":
         date_list.append(deepcopy(queryParameters))
     # sys.exit()
     start_time = time.time()
-    d = ParallelWorker(
+    d = Parallel.worker(
         func, "queryParameters", iterable=date_list, configFile=cf,
-        instrument=instrument).prl()
+        instrument=instrument)
     pprint(pd.concat(d, axis=0))
     print("--- %s seconds ---" % (time.time() - start_time))
 

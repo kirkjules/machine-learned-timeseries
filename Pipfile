@@ -20,6 +20,7 @@ matplotlib = "*"
 tqdm = "*"
 tables = "*"
 sphinx = "*"
+rq = "*"
 
 [requires]
 python_version = "3.7"
