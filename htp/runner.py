@@ -14,7 +14,7 @@ def data_load(ticker, target_interval, supplementary_interval, entry, exit):
 
         exit = store[exit]
         entry = store[entry]
-        price = store["mid"]
+        price = store["M"]
         system = store["sma"]
         observations = store["observations"]
         target_indicators = store["indicators"]

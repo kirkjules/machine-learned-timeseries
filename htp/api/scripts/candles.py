@@ -13,15 +13,21 @@ from htp.toolbox import dates, engine
 logger.enable("htp.api.oanda")
 
 
-def fmt(date):
-    if date is not None:
-        # str_ = date.strftime("%Y-%m-%dT%H:%M:%S.%f000Z")
-        str_ = date.strftime("%Y-%m-%d %H:%M:%S")
-        return str_
+def fmt(date, direct=False):
+    """Helper function to format datetime values correctly depending on the end
+    function."""
+    if direct:
+        s = date.strftime("%Y-%m-%dT%H:%M:%S.%f000Z")
+    else:
+        s = date.strftime("%Y-%m-%d %H:%M:%S")
+    return s
 
 
 def arg_prep(queryParameters):
-
+    """Helper function to generate a list of queryParameters each containing a
+    date pair as generated for the dates.Select function. Each item in the list
+    will be parsed to the ticker query function to be worked on individually.
+    """
     queryParameters_copy = copy.deepcopy(queryParameters)
     date_gen = dates.Select(
         from_=queryParameters_copy["from"], to=queryParameters_copy["to"],
@@ -45,13 +51,15 @@ def block_acquire(func, instrument, queryParameters, sync=False):
     ----------
     func : {"oanda.Candles.to_json", "oanda.Candles.to_df"}
         The function that should be used to query the ticker data.
-
     instrument : str
         The ticker instrument whose timeseries should be queried.
-
     queryParameters : dict
         Variables that will be parsed in the request body onto the api
         endpoint.
+    sync : bool
+        Keyword argument to signal whether data should be acquired
+        synchronously, in a for loop, or not, with asynchronous
+        multiprocessing.
 
     Returns
     -------
@@ -62,27 +70,21 @@ def block_acquire(func, instrument, queryParameters, sync=False):
     Notes
     -----
     Flow
-    1. State date/time range with datetime strings listed in ISO-8601 format.
-    2. Convert date/time to UTC.
-    Note: Parse to query in RFC3339 format: "YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ"
-    3. State granularity
-    Note: daily candles should keep default setting for dailyAlignment and
-            alignmentTimezone settings. Smooth must be set to True to ensure
-            same values as displayed by Oanda on the online portal.
-    4. Query data.
-    Note: any actions logged will be in UTC time. If the user needs a timestamp
-            displayed in local time this functionality will be applied in the
-            relevant functions and methods.
+    1. Enter time range start/end in ISO-8601 format to be converted to UTC.
+    2. Datetime parsed to oanda.Candles in  RFC3339 format: "YYYY-MM-DDTHH:MM:
+    SS.nnnnnnnnnZ"
+    3. Granularity: daily candles should keep default setting for
+    dailyAlignment and alignmentTimezone settings. Smooth must be set to True
+    to ensure same values as displayed by Oanda on the online portal.
 
     Examples
     --------
     >>> func = oanda.Candles.to_df
-    >>> instrument = "AUD_JPY"
     >>> queryParameters = {
     ...    "from": "2012-01-01 17:00:00", "to": "2012-06-27 17:00:00",
     ...    "granularity": "H1", "price": "M"}
     >>> data_mid = setup(
-    ...    func=func, instrument=instrument, queryParameters=queryParameters)
+    ...    func=func, instrument="AUD_JPY", queryParameters=queryParameters)
     >>> data_mid.head()
                            open    high     low   close
     2012-01-01 22:00:00  78.667  78.892  78.627  78.830
@@ -108,7 +110,13 @@ def block_acquire(func, instrument, queryParameters, sync=False):
 
 
 def background_acquire(func, instrument, queryParameters):
+    """Wrapper function that calls a method to enqueue query tasks to rq and
+    then block until all tasks have completed completed in the background to
+    then assemble the result and generate .h5 output.
 
+    Functionality is for proof-of-concept and shouldn't be used for lack of
+    exception handling and testing.
+    """
     files = {}
     for i in arg_prep(queryParameters):
         filename = f"data/{instrument}-{i['from']}-{i['to']}.csv".replace(
@@ -134,8 +142,6 @@ def background_acquire(func, instrument, queryParameters):
         data.name = "{}".format(queryParameters["price"])
         return data.astype("float")
 
-
-# @click.argument("filename", type=click.STRING) to be auto-generated.
 
 @click.command()
 @click.argument("ticker", type=click.STRING)
@@ -207,8 +213,6 @@ def clickData(ticker, sync, price, granularity, count, from_, to, smooth,
     arguments = {"price": price,
                  "granularity": granularity,
                  "count": count,
-                 "from": fmt(from_),
-                 "to": fmt(to),
                  "smooth": smooth,
                  "includeFirst": includefirst,
                  "dailyAlignment": dailyalignment,
@@ -218,14 +222,13 @@ def clickData(ticker, sync, price, granularity, count, from_, to, smooth,
     if background:  # to overwrite sync argument and prevent logic conflict.
         sync = False
 
-    if arguments["to"] is None and arguments["from"] is None:
-        del arguments["to"]
-        del arguments["from"]
-    elif arguments["to"] is not None and arguments["from"] is None:
-        del arguments["from"]
-    elif arguments["to"] is None and arguments["from"] is not None:
-        del arguments["to"]
+    if to is not None and from_ is None:
+        arguments["to"] = fmt(to, direct=True)
+    elif to is None and from_ is not None:
+        arguments["from"] = fmt(from_, direct=True)
     else:
+        arguments["to"] = fmt(to)
+        arguments["from"] = fmt(from_)
         del arguments["count"]
 
     if sync and "count" not in arguments.keys():  # for-loop
@@ -244,7 +247,7 @@ def clickData(ticker, sync, price, granularity, count, from_, to, smooth,
         candle_data = Candles.to_df(
             **{"instrument": ticker, "queryParameters": arguments})
 
-    with pd.HDFStore(f"data/{ticker}-{granularity}.h5") as store:
-        store.append(f"{price}", candle_data)
+    with pd.HDFStore(f"data/{ticker}.h5") as store:
+        store.append(f"{granularity}/{price}", candle_data)
 
     click.echo("Download complete.")

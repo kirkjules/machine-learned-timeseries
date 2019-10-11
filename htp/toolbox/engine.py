@@ -12,16 +12,18 @@ q = rq.Queue(connection=redis_conn)
 
 
 def launch_task(func, *args, **kwargs):
+    """Function to enqueue target function with arguments and return a job id
+    """
     job = q.enqueue(func, *args, **kwargs)
-    print(job.get_id())
     return job.get_id()
 
 
 def queue_completed(tasks):
+    """Blocking function to hang while job id is not present in Finished
+    Registry."""
     for i in tasks:
         while i not in rq.registry.FinishedJobRegistry(queue=q):
             time.sleep(1)
-        print(i)
     return True
 
 

@@ -2,37 +2,12 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from loguru import logger
-from htp.api import oanda
 from htp.analyse import evaluate, indicator
 
 logger.enable("htp.api.oanda")
 
 
-def main():
-
-    # DATA --> object: data_temp
-    func = oanda.Candles.to_df
-    instrument = "AUD_JPY"
-    queryParameters = {
-        "from": "2008-06-01 17:00:00", "to": "2019-08-20 17:00:00",
-        "granularity": "H1", "price": "M"}
-
-    data_mid = setup(
-        func=func, instrument=instrument, queryParameters=queryParameters)
-    with pd.HDFStore("data/AUD_JPY_H1.h5") as store:
-        store.append("data_mid", data_mid)
-
-    queryParameters["price"] = "A"
-    data_ask = setup(
-        func=func, instrument=instrument, queryParameters=queryParameters)
-    with pd.HDFStore("data/AUD_JPY_H1.h5") as store:
-        store.append("data_ask", data_ask)
-
-    queryParameters["price"] = "B"
-    data_bid = setup(
-        func=func, instrument=instrument, queryParameters=queryParameters)
-    with pd.HDFStore("data/AUD_JPY_H1.h5") as store:
-        store.append("data_bid", data_bid)
+def main(data_mid):
 
     # periods = list(range(3, 101, 1))
     periods = [3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 20, 24, 25, 28, 30, 32,
