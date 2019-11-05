@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Acquire</h1>
+    <form action="" method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.ticker.label }}<br>
+            {{ form.ticker(size=32) }}<br>
+            {% for error in form.ticker.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.price.label }}<br>
+            {{ form.price(size=32) }}<br>
+            {% for error in form.ticker.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.from_.label }}<br>
+            {{ form.from_(size=32) }}<br>
+            {% for error in form.ticker.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.to.label }}<br>
+            {{ form.to(size=32) }}<br>
+            {% for error in form.ticker.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.granularity.label }}<br>
+            {{ form.granularity(size=32) }}<br>
+            {% for error in form.ticker.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>{{ form.smooth() }} {{ form.smooth.label }}</p>
+        <p>{{ form.submit() }}</p>
+    </form>
+{% endblock %}

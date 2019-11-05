@@ -83,52 +83,16 @@ class Candles(Api):
     * Where an inappropriate granularity is used which exceeds the
       maximum candle count value an error will be reported by the api
       with a HTTP 400 status and logged by the Candles class.
-
-    Examples
-    --------
-    >>> import os
-    >>> from pprint import pprint
-    >>> from htp.api.oanda import Candles
-    >>> ticker = "EUR_USD"
-    >>> arguments = {"from": "2019-06-27T17:00:00.000000000Z", "count": "3"}
-    >>> cf = os.path.join(os.path.dirname(__file__), "../..", "config.yaml")
-    >>> data = Candles(
-    ...     configFile=cf, instrument=ticker, queryParameters=arguments)
-    >>> pprint(data.r.json())
-    {'candles': [{'complete': True,
-                  'mid': {'c': '1.13664',
-                          'h': '1.13664',
-                          'l': '1.13662',
-                          'o': '1.13662'},
-                  'time': '2019-06-27T17:00:00.000000000Z',
-                  'volume': 2},
-                 {'complete': True,
-                  'mid': {'c': '1.13662',
-                          'h': '1.13662',
-                          'l': '1.13662',
-                          'o': '1.13662'},
-                  'time': '2019-06-27T17:00:05.000000000Z',
-                  'volume': 1},
-                 {'complete': True,
-                  'mid': {'c': '1.13666',
-                          'h': '1.13666',
-                          'l': '1.13664',
-                          'o': '1.13664'},
-                  'time': '2019-06-27T17:00:10.000000000Z',
-                  'volume': 2}],
-     'granularity': 'S5',
-     'instrument': 'EUR_USD'}
     """
 
-    def __init__(self, configFile="config.yaml", api="oanda",
-                 access="practise", **kwargs):
-        super().__init__(configFile, api, access)  # , **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__()
         self.headers = {"Content-Type": "application/json",
                         "Authorization": "Bearer {0}"
                         .format(self.details["token"])}
         self.instrument = kwargs["instrument"]
-        self.url = self.details["url"] + "instruments/{0}/candles?".format(
-            self.instrument)
+        self.url = f'https://api-fxpractice.oanda.com/v3/instruments/'
+        '{self.instrument}/candles?'
         self.queryParameters = kwargs["queryParameters"]
 
         try:
@@ -140,166 +104,45 @@ class Candles(Api):
                 "There has been an error connecting with the api endpoint as "
                 "raised by: {}".format(e)) from None
         else:
-            status = self.r.status_code
-
-            if status != 200:
+            if self.r.status_code != requests.codes.ok:
                 raise exceptions.OandaError(
                   "The instrument.Candles endpoint has returned the following"
-                  " error", self.r.json(), status)
+                  " error", self.r.json(), self.r.status_code)
             else:
-                try:
-                    msg = "{0} - {1}".format(
-                        kwargs["queryParameters"]["from"],
-                        kwargs["queryParameters"]["to"]).replace(
-                            ".000000000Z", "")
-                except KeyError:
-                    msg = "{0} - {1}".format(
-                        kwargs["queryParameters"]["from"],
-                        kwargs["queryParameters"]["count"]).replace(
-                            ".000000000Z", "")
-                finally:
-                    logger.info(msg)
+                pass
 
-    @classmethod
-    def to_json(cls, **kwargs):
-        """
-        An @classmethod that returns the ticker timeseries data that is
-        queried.
+    @staticmethod
+    def to_df(r, params):
+        """Static function to process ticker data received from Oanda's
+        instrument.Candles endpoint into a pandas DataFrame.
 
         Parameters
         ----------
-        kwargs
-            To accept all keyword arguments that are parsed to the class
-            __init__ method.
+        r : dict
+            The dictionary returned by the instrumet.Candles endpoint.
+        params : dict
+            The parameters dictionary that was sent as an argument to the
+        endpoint.
 
         Returns
         -------
-        dict
-            The timeseries data that is returned in the response body of the
-            GET request. The data is decoded from json to dic format by the
-            requests library.
-
-        See Also
-        --------
-        Candles.__init__ : The GET HTTP request to the API endpoint.
-        Candles.to_dic : The class method that returns the to_json output in a
-                         pandas DataFrame.
-
-        Examples
-        --------
-        >>> from pprint import pprint
-        >>> from htp.api.oanda import Candles
-        >>> ticker = "EUR_USD"
-        >>> arguments = {
-        ...     "from": "2019-06-27T17:00:00.000000000Z", "count": "3"}
-        >>> pprint(
-        ...     Candles.to_json(instrument=ticker, queryParameters=arguments))
-        {'candles': [{'complete': True,
-                      'mid': {'c': '1.13664',
-                              'h': '1.13664',
-                              'l': '1.13662',
-                              'o': '1.13662'},
-                      'time': '2019-06-27T17:00:00.000000000Z',
-                      'volume': 2},
-                     {'complete': True,
-                      'mid': {'c': '1.13662',
-                              'h': '1.13662',
-                              'l': '1.13662',
-                              'o': '1.13662'},
-                      'time': '2019-06-27T17:00:05.000000000Z',
-                      'volume': 1},
-                     {'complete': True,
-                      'mid': {'c': '1.13666',
-                              'h': '1.13666',
-                              'l': '1.13664',
-                              'o': '1.13664'},
-                      'time': '2019-06-27T17:00:10.000000000Z',
-                      'volume': 2}],
-         'granularity': 'S5',
-         'instrument': 'EUR_USD'}
+        pandas.core.DataFrame
+             Pandas DataFrame with a datetime index and open, high, low and
+        close ticker value columns.
         """
-        try:
-            data = cls(**kwargs).r.json()
-        except (exceptions.ApiError, exceptions.OandaError) as e:
-            logger.exception(e)
-            key = (kwargs["queryParameters"]["from"],
-                   kwargs["queryParameters"]["to"])
-            return {key: e}
-        else:
-            return data
-
-    @classmethod
-    def to_df(cls, filename=None, **kwargs):
-        """
-        An @classmethod that returns the ticker timeseries data that is
-        queried.
-
-        Parameters
-        ----------
-        filename : str
-            The `.csv` filename with path if desired output directory is not
-            the current one.
-        kwargs
-            To accept all keyword arguments that are parsed to the class
-            __init__ method.
-
-        Returns
-        -------
-        pandas.core.frame.DataFrame
-            The dic that is returned by the `to_json` class method is further
-            manipulated into a pandas DataFrame object.
-        csv
-            Optional output if a filename is parsed in the arguments. This will
-            save the ticker timeseries data in a `.csv` file.
-
-        See Also
-        --------
-        Candles.__init__ : The GET HTTP request to the API endpoint.
-        Candles.to_json : The class method that returns the endpoint response's
-                          body in dic format.
-
-        Examples
-        --------
-        >>> from pprint import pprint
-        >>> from htp.api.oanda import Candles
-        >>> ticker = "EUR_USD"
-        >>> arguments = {
-        ...     "from": "2019-06-27T17:00:00.000000000Z", "count": "3"}
-        >>> pprint(Candles.to_df(instrument=ticker, queryParameters=arguments))
-                                open     high      low    close
-        2019-06-27 17:00:00  1.13662  1.13664  1.13662  1.13664
-        2019-06-27 17:00:05  1.13662  1.13662  1.13662  1.13662
-        2019-06-27 17:00:10  1.13664  1.13666  1.13664  1.13666
-        """
-
         dic = {}
-
+        price = {"M": "mid", "A": "ask", "B": "bid"}
         cols = {"o": "open", "h": "high", "l": "low", "c": "close"}
-
-        resp = cls.to_json(**kwargs)
-        if "exc" in resp:
-            return None
-
-        try:
-            price = "".join([i for i in ["mid", "bid", "ask"]
-                             if i in resp["candles"][0].keys()])
-        except IndexError:
-            logger.info(resp["candles"])
-            return pd.DataFrame(columns=["open", "high", "low", "close"])
-
-        for i in range(len(resp["candles"])):
-            dic[resp["candles"][i]["time"]] = resp["candles"][i][price]
-
-        data = pd.DataFrame.from_dict(dic, orient="index").rename(columns=cols)
-        data_index_dt = data.set_index(
-            pd.to_datetime(data.index,
-                           format="%Y-%m-%dT%H:%M:%S.%f000Z"), drop=True)
-        data_sorted = data_index_dt.sort_index()
-
-        if filename is None:
-            return data_sorted
-        else:
-            return data_sorted.to_csv(filename)
+        for i in range(len(r["candles"])):
+            dic[r["candles"][i]["time"]] =\
+                r["candles"][i][price[params["price"]]]
+        data = pd.DataFrame.from_dict(
+            dic, orient="index").rename(columns=cols)
+        data.set_index(
+            pd.to_datetime(data.index, format="%Y-%m-%dT%H:%M:%S.%f000Z"),
+            drop=True, inplace=True)
+        data.sort_index(inplace=True)
+        return data
 
 
 if __name__ == "__main__":
@@ -313,5 +156,4 @@ if __name__ == "__main__":
     ticker = sys.argv[1]
     queryParameters = {
         "from": sys.argv[2], "count": sys.argv[3], "granularity": sys.argv[4]}
-    Candles.to_df(filename=sys.argv[5], instrument=ticker,
-                  queryParameters=queryParameters)
+    print(Candles(instrument=ticker, queryParameters=queryParameters).r.json())

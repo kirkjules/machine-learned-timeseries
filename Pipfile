@@ -4,11 +4,11 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
-htp = {editable = true,path = "."}
 pytest = "*"
 ipython = "*"
 tulipy = "*"
 memory-profiler = "*"
+htp = {editable = true,path = "."}
 
 [packages]
 requests = "*"
@@ -21,6 +21,12 @@ tqdm = "*"
 tables = "*"
 sphinx = "*"
 rq = "*"
+celery = "*"
+flask = "*"
+flask-wtf = "*"
+flask-login = "*"
+sqlalchemy = "*"
+psycopg2-binary = "*"
 
 [requires]
 python_version = "3.7"
