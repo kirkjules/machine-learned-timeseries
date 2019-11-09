@@ -1,7 +1,7 @@
 from htp import login
-from htp.database import Base
+from htp.aux.database import Base
 from flask_login import UserMixin
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, DateTime
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
@@ -28,3 +28,16 @@ class User(Base, UserMixin):
 @login.user_loader
 def load_user(id):
     return User.query.get(int(id))
+
+
+class CandlesTasks(Base):
+    __tablename__ = 'candlestasks'
+    id = Column(Integer, primary_key=True)  # default set autoincrement=True
+    ticker = Column(String(50))
+    from_ = Column(DateTime())
+    to = Column(DateTime())
+    granularity = Column(String(3))
+    price = Column(String(1))
+    task_id = Column(String(50))
+    task_status = Column(String(50))
+    task_error = Column(String(120))

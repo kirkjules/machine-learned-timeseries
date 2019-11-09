@@ -1,7 +1,7 @@
 import click
-from htp import tasks
 from celery import chord
 from copy import deepcopy
+from htp.aux import tasks
 from htp.toolbox import dates
 
 
@@ -33,9 +33,8 @@ def get_data(ticker, price, granularity, from_, to, smooth):
     param_set = arg_prep(args)
     header = [tasks.session_get_data.signature(
         (ticker,), {"params": params, "timeout": 30}) for params in param_set]
-    callback = tasks.merge_data.s()
-    chord(header)(callback)
-    # res.get()
+    callback = tasks.merge_data.s(price, granularity, ticker)
+    return chord(header)(callback)
 
 
 @click.command()
@@ -47,7 +46,7 @@ def get_data(ticker, price, granularity, from_, to, smooth):
 @click.option("--to", default=None, type=click.DateTime(formats=None))
 @click.option("--smooth", default=False, type=click.BOOL)
 def cli_get_data(ticker, price, granularity, from_, to, smooth):
-    return get_data(ticker, price, granularity, from_, to, smooth)
+    return get_data(ticker, price, granularity, from_, to, smooth).get()
 
 
 if __name__ == "__main__":

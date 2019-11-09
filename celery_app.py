@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # activated inside virtual environment with:
-# (venv) $ celery worker -A celery_worker.celery --loglevel=info
+# (venv) $ celery worker -A celery_app.celery --loglevel=info
+import os
 from htp import celery, create_app
 
 

@@ -1,12 +1,20 @@
-from pprint import pformat
+import sys
+from pprint import pprint, pformat
 from htp import celery as app
 from celery.events import EventReceiver
 from celery.events.snapshot import Polaroid
 from kombu import Connection as BrokerConnection
+from celery.task.control import inspect
+from itertools import chain
+
+def show():
+    pprint(set(chain.from_iterable( inspect().registered_tasks().values() )))
+    # pprint(f"Scheduled: {inspect().scheduled()}")
+    # pprint(f"Active: {inspect().active()}")
 
 
 def my_monitor():
-    connection = BrokerConnection('redis://localhost')
+    connection = BrokerConnection('amqp://localhost')
 
     def on_event(event):
         print(f"EVENT HAPPENED: {event},")
