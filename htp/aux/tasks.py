@@ -1,5 +1,6 @@
 import requests
 import pandas as pd
+from uuid import UUID
 from htp import celery
 from htp.api import Api
 from celery import Task
@@ -7,7 +8,7 @@ from datetime import datetime
 from htp.analyse import indicator
 from htp.api.oanda import Candles
 from htp.aux.database import db_session
-from htp.aux.models import CandlesTasks
+from htp.aux.models import getTickerTask, subTickerTask, indicatorTask
 
 
 class SessionTask(Task, Api):
@@ -28,7 +29,7 @@ class SessionTask(Task, Api):
 
 @celery.task(base=SessionTask, bind=True)
 def session_get_data(
-  self, ticker, params={"count": 5, "price": "M"}, timeout=None):
+  self, ticker, params={"count": 5, "price": "M"}, timeout=None, db=False):
     """Celery task function to engage Oanda instruments.Candles endpoint.
 
     Paramaters
@@ -41,6 +42,8 @@ def session_get_data(
     timeout : float {None}
         Set timeout value for production server code so that function doesn't
         block.
+    db : boolean
+        Flag to indicate if function progress to be tracked in the database.
 
     Returns
     -------
@@ -63,34 +66,38 @@ def session_get_data(
         else:
             res = Candles.to_df(r.json(), params)
     finally:
-        params["to"] = datetime.strptime(
-            params["to"], "%Y-%m-%dT%H:%M:%S.%f000Z")
-        params["from"] = datetime.strptime(
-            params["from"], "%Y-%m-%dT%H:%M:%S.%f000Z")
-        entry = CandlesTasks(
-            ticker=ticker, from_=params["from"], to=params["to"],
-            granularity=params["granularity"], price=params["price"],
-            task_id=self.request.id)
-        if isinstance(res, str):
-            entry.task_error = res
-        db_session.add(entry)
-        db_session.commit()
-        db_session.remove()
+        if db:
+            entry = db_session.query(subTickerTask).get(UUID(self.request.id))
+            if isinstance(res, str):
+                entry.status = 0
+                entry.error = res
+            else:
+                entry.status = 1
+            db_session.commit()
+            db_session.remove()
         return res
 
 
 @celery.task
-def merge_data(results, price, granularity, ticker):
+def merge_data(results, price, granularity, ticker, task_id=None):
     for result in results:
         if isinstance(result, str):
             results.remove(result)
+
     if results:
         total = pd.concat([result for result in results])
         total = total[~total.index.duplicated(keep='first')]
         total.sort_index(inplace=True)
+
         filename = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}.h5"
         with pd.HDFStore(filename) as store:
             store.append(f"{granularity}/{price}", total)
+
+        if task_id is not None:
+            entry = db_session.query(getTickerTask).get(task_id)
+            entry.status = 1
+            db_session.commit()
+            db_session.remove()
 
 
 @celery.task

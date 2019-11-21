@@ -1,7 +1,9 @@
 from htp import login
 from htp.aux.database import Base
 from flask_login import UserMixin
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy.orm import relationship, backref
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
@@ -30,14 +32,39 @@ def load_user(id):
     return User.query.get(int(id))
 
 
-class CandlesTasks(Base):
-    __tablename__ = 'candlestasks'
-    id = Column(Integer, primary_key=True)  # default set autoincrement=True
+class getTickerTask(Base):
+    __tablename__ = 'getTickerTask'
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, unique=True)
     ticker = Column(String(50))
-    from_ = Column(DateTime())
-    to = Column(DateTime())
-    granularity = Column(String(3))
     price = Column(String(1))
-    task_id = Column(String(50))
-    task_status = Column(String(50))
-    task_error = Column(String(120))
+    granularity = Column(String(3))
+    status = Column(Integer)
+    get_subtasks = relationship("subTickerTask", backref="getTickerTask")
+    indicator_tasks = relationship(
+        "indicatorTask", backref=backref("getTickerTask", uselist=False))
+
+
+class subTickerTask(Base):
+    __tablename__ = 'subTickerTask'
+    id = Column(UUID(as_uuid=True), primary_key=True, unique=True)
+    get_id = Column(UUID(as_uuid=True), ForeignKey("getTickerTask.id"))
+    _from = Column(DateTime(), nullable=False)
+    to = Column(DateTime(), nullable=False)
+    status = Column(Integer)
+    error = Column(String(120))
+
+
+class indicatorTask(Base):
+    __tablename__ = 'indicatorTask'
+    get_id = Column(
+        UUID(as_uuid=True), ForeignKey("getTickerTask.id"), primary_key=True,
+        unique=True)
+    adx_status = Column(Integer)
+    atr_status = Column(Integer)
+    stochastic_status = Column(Integer)
+    rsi_status = Column(Integer)
+    macd_status = Column(Integer)
+    ichimoku_status = Column(Integer)
+    sma_status = Column(Integer)
+    status = Column(Integer)
