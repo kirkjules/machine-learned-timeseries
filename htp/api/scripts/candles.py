@@ -1,10 +1,16 @@
 import click
-from uuid import uuid4, UUID
 from celery import chord
 from copy import deepcopy
+from uuid import uuid4, UUID
+from htp.toolbox import dates
 from htp.aux import tasks, models
 from htp.aux.database import db_session
-from htp.toolbox import dates
+
+
+# imported celery app for chord to recognise backend.
+# unsure if this is required in production code, was working fine earlier.
+from htp import celery
+print(celery.conf.result_backend)
 
 
 def arg_prep(queryParameters):
@@ -47,7 +53,7 @@ def get_data(ticker, price, granularity, from_, to, smooth, db=True):
         g = tasks.session_get_data.signature(
             (ticker,), {"params": params, "timeout": 30, "db": db})
         g.freeze()
-        print(g.id)
+        # print(g.id)
         header.append(g)
         if db:
             db_session.add(

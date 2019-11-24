@@ -5,6 +5,15 @@ from flask_login import LoginManager
 
 
 celery = Celery(__name__, broker=os.environ['CELERY_BROKER'])
+celery.conf.update(
+    result_backend=os.environ['CELERY_BACKEND'],
+    accept_content=['pickle', 'json'],
+    task_serializer='pickle',
+    result_accept_content=['pickle', 'json'],
+    result_serializer='pickle',
+    worker_send_task_events=True,
+    task_send_sent_event=True
+)
 login = LoginManager()
 login.login_view = 'auth.login'
 
@@ -13,15 +22,7 @@ def create_app():
     app = Flask(__name__)
     app.config.update(SECRET_KEY=os.environ['FLASK_SECRET_KEY'])
 
-    celery.conf.update(
-        result_backend=os.environ['CELERY_BACKEND'],
-        accept_content=['pickle', 'json'],
-        task_serializer='pickle',
-        result_accept_content=['pickle', 'json'],
-        result_serializer='pickle',
-        worker_send_task_events=True,
-        task_send_sent_event=True
-    )
+    # celery config goes here
 
     login.init_app(app)
 
@@ -39,5 +40,8 @@ def create_app():
 
     from htp.views import get
     app.register_blueprint(get.bp)
+
+    from htp.views import indicate
+    app.register_blueprint(indicate.bp)
 
     return app

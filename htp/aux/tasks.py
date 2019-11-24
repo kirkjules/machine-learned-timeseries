@@ -4,7 +4,7 @@ from uuid import UUID
 from htp import celery
 from htp.api import Api
 from celery import Task
-from datetime import datetime
+# from datetime import datetime
 from htp.analyse import indicator
 from htp.api.oanda import Candles
 from htp.aux.database import db_session
@@ -78,6 +78,19 @@ def session_get_data(
         return res
 
 
+def record(table, columns, task_id=None):
+    """Helper function to record tasks' internal functions' success in the
+    database."""
+    if task_id is not None:
+        entry = db_session.query(table).get(task_id)
+        for column in columns:
+            setattr(entry, column, 1)
+        db_session.commit()
+        db_session.remove()
+    else:
+        pass
+
+
 @celery.task
 def merge_data(results, price, granularity, ticker, task_id=None):
     for result in results:
@@ -86,18 +99,21 @@ def merge_data(results, price, granularity, ticker, task_id=None):
 
     if results:
         total = pd.concat([result for result in results])
-        total = total[~total.index.duplicated(keep='first')]
+        total = total.loc[~total.index.duplicated(keep='first')]
         total.sort_index(inplace=True)
 
         filename = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}.h5"
         with pd.HDFStore(filename) as store:
-            store.append(f"{granularity}/{price}", total)
+            # to maximise storage:
+            # $ ptrepack --chunkshape=auto --propindexes --complevel=9
+            # data/NZD_JPY.h5 data/out.h5
+            # to prevent duplicates
+            if f"/{granularity}/{price}" in store.keys():
+                # print("Removing data")
+                store.remove(f"{granularity}/{price}")
+            store.put(f"{granularity}/{price}", total)
 
-        if task_id is not None:
-            entry = db_session.query(getTickerTask).get(task_id)
-            entry.status = 1
-            db_session.commit()
-            db_session.remove()
+        record(getTickerTask, ('status',), task_id=task_id)
 
 
 @celery.task
@@ -107,23 +123,70 @@ def load_data(filename, key):
 
 
 @celery.task
-def set_smooth_moving_average(df):
+def set_smooth_moving_average(df, task_id=None):
     periods = [3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 20, 24, 25, 28, 30, 32,
                35, 36, 40, 48, 50, 60, 64, 70, 72, 80, 90, 96, 100]
     avgs = []
     for i in periods:
         avg = indicator.smooth_moving_average(df, column="close", period=i)
         avgs.append(avg)
-    return pd.concat(avgs, axis=1)
+
+    r = pd.concat(avgs, axis=1)
+    record(indicatorTask, ('sma_status',), task_id=task_id)
+    return r
 
 
 @celery.task
-def set_ichimoku_kinko_hyo(df):
-    return indicator.ichimoku_kinko_hyo(df)
+def set_ichimoku_kinko_hyo(df, task_id=None):
+    r = indicator.ichimoku_kinko_hyo(df)
+    record(indicatorTask, ('ichimoku_status',), task_id=task_id)
+    return r
 
 
 @celery.task
-def assemble(list_indicators, granularity, filename):
+def set_moving_average_convergence_divergence(df, task_id=None):
+    macd = indicator.moving_average_convergence_divergence(df)
+    macd.drop(['emaF', 'emaS'], axis=1, inplace=True)
+    record(indicatorTask, ('macd_status',), task_id=task_id)
+    return macd
+
+
+@celery.task
+def set_stochastic(df, task_id=None):
+    print(task_id)
+    stoch = indicator.stochastic(df)
+    stoch.drop(['close', 'minN', 'maxN'], axis=1, inplace=True)
+    record(indicatorTask, ('stoch_status',), task_id=task_id)
+    return stoch
+
+
+@celery.task
+def set_relative_strength_index(df, task_id=None):
+    rsi = indicator.relative_strength_index(df)
+    rsi.drop(['avg_gain', 'avg_loss', 'RS'], axis=1, inplace=True)
+    record(indicatorTask, ('rsi_status',), task_id=task_id)
+    return rsi
+
+
+@celery.task
+def set_momentum(df, task_id=None):
+    atr = indicator.Momentum.average_true_range(df)
+    atr.drop(['HL', 'HpC', 'LpC', 'TR', 'r14TR'], axis=1, inplace=True)
+    adx = indicator.Momentum.average_directional_movement(df)
+    adx.drop(['+DI', '-DI', 'DX'], axis=1, inplace=True)
+    r = atr.merge(adx, how="left", left_index=True, right_index=True,
+                  validate="1:1")
+    record(indicatorTask, ('atr_status', 'adx_status'), task_id=task_id)
+    return r
+
+
+@celery.task
+def assemble(list_indicators, granularity, filename, task_id=None):
     indicators = pd.concat(list_indicators, axis=1)
     with pd.HDFStore(filename) as store:
+        if f"/{granularity}/indicators" in store.keys():
+            # print("Removing data")
+            store.remove(f"{granularity}/indicators")
         store.append(f"{granularity}/indicators", indicators)
+
+    record(indicatorTask, ('status',), task_id=task_id)

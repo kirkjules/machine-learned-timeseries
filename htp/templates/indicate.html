@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1>Get Ticker Data</h1>
+    <h1>Generate Indicator Data</h1>
     <form action="" method="post" novalidate>
         {{ form.hidden_tag() }}
         <p>
@@ -14,20 +14,6 @@
         <p>
             {{ form.price.label }}<br>
             {{ form.price(size=3) }}<br>
-            {% for error in form.ticker.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.from_.label }}<br>
-            {{ form.from_(size=32) }}<br>
-            {% for error in form.ticker.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.to.label }}<br>
-            {{ form.to(size=32) }}<br>
             {% for error in form.ticker.errors %}
             <span style="color: red;">[{{ error }}]</span>
             {% endfor %}

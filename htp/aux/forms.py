@@ -1,5 +1,6 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, \
+    SelectMultipleField, DateTimeField
 from wtforms.validators import DataRequired
 
 
@@ -12,9 +13,25 @@ class LoginForm(FlaskForm):
 
 class CandlesForm(FlaskForm):
     ticker = StringField('Ticker', validators=[DataRequired()])
-    price = StringField('Price', validators=[DataRequired()])
-    from_ = StringField('From', validators=[DataRequired()])
-    to = StringField('To', validators=[DataRequired()])
-    granularity = StringField('Granularity', validators=[DataRequired()])
+    price = SelectMultipleField(
+        'Price', validators=[DataRequired()], choices=[
+            ("M", "Mid"), ("A", "Ask"), ("B", "Bid")])
+    from_ = DateTimeField('From', validators=[DataRequired()])
+    to = DateTimeField('To', validators=[DataRequired()])
+    granularity = SelectMultipleField(
+        'Granularity', validators=[DataRequired()], choices=[
+            ("M15", "M15"), ("H", "H"), ("H4", "H4")])
+    smooth = BooleanField('Smooth')
+    submit = SubmitField('Acquire')
+
+
+class IndicateForm(FlaskForm):
+    ticker = StringField('Ticker', validators=[DataRequired()])
+    price = SelectMultipleField(
+        'Price', validators=[DataRequired()], choices=[
+            ("M", "Mid"), ("A", "Ask"), ("B", "Bid")])
+    granularity = SelectMultipleField(
+        'Granularity', validators=[DataRequired()], choices=[
+            ("M15", "M15"), ("H", "H"), ("H4", "H4")])
     smooth = BooleanField('Smooth')
     submit = SubmitField('Acquire')
