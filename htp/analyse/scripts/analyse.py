@@ -7,22 +7,23 @@ from htp.aux.database import db_session
 from htp.aux.models import getTickerTask, indicatorTask
 
 
-def get_data(ticker, price, granularity, db=True):
+def get_data(ticker, granularity, db=True):
     """Function that enqueues indicator calculations in celery to be actioned
     by a rabbitmq backend."""
 
-    filename = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}.h5"
-    key = f"{granularity}/{price}"
+    filename = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}\
+{granularity}.h5"
+    key = "/M"
 
     task_id = None
     if db:
         entry = db_session.query(getTickerTask).filter(
-            getTickerTask.ticker == ticker, getTickerTask.price == price,
+            getTickerTask.ticker == ticker, getTickerTask.price == 'M',
             getTickerTask.granularity == granularity).first()
         if entry is None:
             # Indirect check to confirm pre-existing ticker data.
-            return f"No data has been stored for {ticker} in {granularity} "
-        "intervals."
+            return f"No data has been stored for {ticker} in {granularity} \
+intervals."
         task_id = entry.id
         db_session.add(indicatorTask(get_id=task_id))
         db_session.commit()
@@ -42,7 +43,7 @@ def get_data(ticker, price, granularity, db=True):
         tasks.set_momentum.s(task_id=task_id)
         )
 
-    callback = tasks.assemble.s(granularity, filename, task_id=task_id)
+    callback = tasks.assemble.s(ticker, granularity, task_id=task_id)
 
     return (get | header | callback).delay()
 

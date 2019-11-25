@@ -75,7 +75,7 @@ def session_get_data(
                 entry.status = 1
             db_session.commit()
             db_session.remove()
-        return res
+        return (res, params["price"], params["granularity"])
 
 
 def record(table, columns, task_id=None):
@@ -92,28 +92,40 @@ def record(table, columns, task_id=None):
 
 
 @celery.task
-def merge_data(results, price, granularity, ticker, task_id=None):
+def merge_data(results, ticker, price, granularity, task_id=None):
+
+    d = {}
+    for val in price:
+        for interval in granularity:
+            # print(f"{interval}/{val}")
+            d[f"{interval}/{val}"] = []
+
     for result in results:
-        if isinstance(result, str):
-            results.remove(result)
+        if not isinstance(result[0], str):
+            # params["granularity"]/params["price"]
+            d[f"{result[2]}/{result[1]}"].append(result[0])
 
-    if results:
-        total = pd.concat([result for result in results])
-        total = total.loc[~total.index.duplicated(keep='first')]
-        total.sort_index(inplace=True)
+    for k in d.keys():
+        if len(d[k]) > 0:
+            total = pd.concat(d[k])
+            total = total.loc[~total.index.duplicated(keep='first')]
+            total.sort_index(inplace=True)
 
-        filename = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}.h5"
-        with pd.HDFStore(filename) as store:
-            # to maximise storage:
-            # $ ptrepack --chunkshape=auto --propindexes --complevel=9
-            # data/NZD_JPY.h5 data/out.h5
-            # to prevent duplicates
-            if f"/{granularity}/{price}" in store.keys():
-                # print("Removing data")
-                store.remove(f"{granularity}/{price}")
-            store.put(f"{granularity}/{price}", total)
+            filename = f"/Users/juleskirk/Documents/projects/htp/data/\
+{ticker}{k.split('/')[0]}.h5"
 
-        record(getTickerTask, ('status',), task_id=task_id)
+            with pd.HDFStore(filename) as store:
+                # to maximise storage:
+                # $ ptrepack --chunkshape=auto --propindexes --complevel=9
+                # data/NZD_JPY.h5 data/out.h5
+                # to prevent duplicates
+                if f"/{k.split('/')[1]}" in store.keys():
+                    # print("Removing data")
+                    store.remove(f"{k.split('/')[1]}")
+                store.put(f"{k.split('/')[1]}", total)
+
+            del total
+            record(getTickerTask, ('status',), task_id=task_id[f"{k}"])
 
 
 @celery.task
@@ -153,10 +165,9 @@ def set_moving_average_convergence_divergence(df, task_id=None):
 
 @celery.task
 def set_stochastic(df, task_id=None):
-    print(task_id)
     stoch = indicator.stochastic(df)
     stoch.drop(['close', 'minN', 'maxN'], axis=1, inplace=True)
-    record(indicatorTask, ('stoch_status',), task_id=task_id)
+    record(indicatorTask, ('stochastic_status',), task_id=task_id)
     return stoch
 
 
@@ -181,12 +192,9 @@ def set_momentum(df, task_id=None):
 
 
 @celery.task
-def assemble(list_indicators, granularity, filename, task_id=None):
+def assemble(list_indicators, ticker, granularity, task_id=None):
     indicators = pd.concat(list_indicators, axis=1)
-    with pd.HDFStore(filename) as store:
-        if f"/{granularity}/indicators" in store.keys():
-            # print("Removing data")
-            store.remove(f"{granularity}/indicators")
-        store.append(f"{granularity}/indicators", indicators)
-
+    filename = f"/Users/juleskirk/Documents/projects/htp/data/\
+{ticker}{granularity}indicators.h5"
+    indicators.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
     record(indicatorTask, ('status',), task_id=task_id)

@@ -20,18 +20,14 @@ class CandlesForm(FlaskForm):
     to = DateTimeField('To', validators=[DataRequired()])
     granularity = SelectMultipleField(
         'Granularity', validators=[DataRequired()], choices=[
-            ("M15", "M15"), ("H", "H"), ("H4", "H4")])
+            ("M15", "M15"), ("H1", "H1"), ("H4", "H4")])
     smooth = BooleanField('Smooth')
     submit = SubmitField('Acquire')
 
 
 class IndicateForm(FlaskForm):
     ticker = StringField('Ticker', validators=[DataRequired()])
-    price = SelectMultipleField(
-        'Price', validators=[DataRequired()], choices=[
-            ("M", "Mid"), ("A", "Ask"), ("B", "Bid")])
     granularity = SelectMultipleField(
         'Granularity', validators=[DataRequired()], choices=[
-            ("M15", "M15"), ("H", "H"), ("H4", "H4")])
-    smooth = BooleanField('Smooth')
+            ("M15", "M15"), ("H1", "H1"), ("H4", "H4")])
     submit = SubmitField('Acquire')

@@ -12,20 +12,12 @@
             {% endfor %}
         </p>
         <p>
-            {{ form.price.label }}<br>
-            {{ form.price(size=3) }}<br>
-            {% for error in form.ticker.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-            {% endfor %}
-        </p>
-        <p>
             {{ form.granularity.label }}<br>
             {{ form.granularity(size=3) }}<br>
             {% for error in form.ticker.errors %}
             <span style="color: red;">[{{ error }}]</span>
             {% endfor %}
         </p>
-        <p>{{ form.smooth() }} {{ form.smooth.label }}</p>
         <p>{{ form.submit() }}</p>
     </form>
 {% endblock %}

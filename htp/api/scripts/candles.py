@@ -17,8 +17,8 @@ def arg_prep(queryParameters):
 
     qPcopy = deepcopy(queryParameters)
     date_gen = dates.Select(
-        from_=qPcopy["from"],  # .strftime("%Y-%m-%d %H:%M:%S"),
-        to=qPcopy["to"],  # .strftime("%Y-%m-%d %H:%M:%S"),
+        from_=qPcopy["from"].strftime("%Y-%m-%d %H:%M:%S"),
+        to=qPcopy["to"].strftime("%Y-%m-%d %H:%M:%S"),
         local_tz="America/New_York").by_month()
 
     date_list = []
@@ -32,42 +32,37 @@ def arg_prep(queryParameters):
 
 def get_data(ticker, price, granularity, from_, to, smooth, db=True):
 
-    args = {"price": price,
-            "granularity": granularity,
-            "from": from_,
-            "to": to,
-            "smooth": smooth}
-
-    _id = None
-    if db:
-        _id = uuid4()
-        db_session.add(
-            models.getTickerTask(
-                id=_id, ticker=ticker, price=price, granularity=granularity
-            )
-        )
-
-    param_set = arg_prep(args)
+    _ids = {}
     header = []
-    for params in param_set:
-        g = tasks.session_get_data.signature(
-            (ticker,), {"params": params, "timeout": 30, "db": db})
-        g.freeze()
-        # print(g.id)
-        header.append(g)
-        if db:
-            db_session.add(
-                models.subTickerTask(
-                    id=UUID(g.id), get_id=_id, _from=params["from"],
-                    to=params["to"]
-                )
-            )
+    for val in price:
+        for interval in granularity:
+
+            args = {"price": val, "granularity": interval, "from": from_,
+                    "to": to, "smooth": smooth}
+
+            _ids[f"{interval}/{val}"] = None
+            if db:
+                _ids[f"{interval}/{val}"] = uuid4()
+                db_session.add(models.getTickerTask(
+                    id=_ids[f"{interval}/{val}"], ticker=ticker, price=val,
+                    granularity=interval))
+
+            param_set = arg_prep(args)
+            for params in param_set:
+                g = tasks.session_get_data.signature(
+                    (ticker,), {"params": params, "timeout": 30, "db": db})
+                g.freeze()
+                # print(g.id)
+                header.append(g)
+                if db:
+                    db_session.add(models.subTickerTask(
+                        id=UUID(g.id), get_id=_ids[f"{interval}/{val}"],
+                        _from=params["from"], to=params["to"]))
 
     if db:
         db_session.commit()
 
-    callback = tasks.merge_data.signature(
-        (price, granularity, ticker), {"task_id": _id})
+    callback = tasks.merge_data.s(ticker, price, granularity, task_id=_ids)
     return chord(header)(callback)
 
 
