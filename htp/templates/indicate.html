@@ -1,23 +1,33 @@
 {% extends "base.html" %}
 
+{% block styles %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/forms.css') }}" rel="stylesheet" type="text/css">
+{% endblock %}
+
 {% block content %}
-    <h1>Generate Indicator Data</h1>
-    <form action="" method="post" novalidate>
-        {{ form.hidden_tag() }}
-        <p>
-            {{ form.ticker.label }}<br>
-            {{ form.ticker(size=32) }}<br>
-            {% for error in form.ticker.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.granularity.label }}<br>
-            {{ form.granularity(size=3) }}<br>
-            {% for error in form.ticker.errors %}
-            <span style="color: red;">[{{ error }}]</span>
-            {% endfor %}
-        </p>
-        <p>{{ form.submit() }}</p>
-    </form>
+<div class="formwrapper">
+  <h2 class="title">Generate Indicator Set</h2>
+  <form action="" method="post" novalidate>
+    {{ form.hidden_tag() }}
+    <div class="form-field">{{ form.ticker.label }} {{ form.ticker }}
+      {% if form.ticker.errors %}
+        <ul class="errors">
+	  {% for error in form.ticker.errors %}
+	    <li>{{ error }}</li>
+	  {% endfor %}
+	</ul>
+      {% endif %}
+    </div>
+    <div class="form-field">{{ form.granularity.label }} {{ form.granularity }}
+      {% if form.granularity.errors %}
+        <ul class="errors">
+	  {% for error in form.granularity.errors %}
+	    <li>{{ error }}</li>
+	  {% endfor %}
+	</ul>
+      {% endif %}
+    </div>
+    {{ form.submit() }}
+  </form>
+</div>
 {% endblock %}

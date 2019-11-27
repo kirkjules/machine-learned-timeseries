@@ -1,33 +1,29 @@
-<html>
-    <head>
-      {% if title %}
-      <title>{{ title }} - web_app</title>
+<!DOCTYPE html>
+
+<html lang="en">
+
+  <head>
+    {% include 'meta.html' %}
+    {% block styles %}{% endblock%}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet" type="text/css">
+    <script src="https://kit.fontawesome.com/e3deaeba31.js" crossorigin="anonymous"></script>
+    <link href="https://fonts.googleapis.com/css?family=Poppins:200,300,500" rel="stylesheet">
+  </head>
+  
+  <body class="{{template}}">
+    <div>
+      {% if current_user.is_anonymous %}
+      <a href="{{ url_for('auth.login') }}">Login</a>
       {% else %}
-      <title>web_app</title>
+      <a href="{{ url_for('index.monitor') }}">Monitor</a>
+      <a href="{{ url_for('get.candles') }}">Get Data</a>
+      <a href="{{ url_for('indicate.indicators') }}">Indicators</a>
+      <a href="{{ url_for('auth.logout') }}">Logout</a>
       {% endif %}
-    </head>
-    <body>
-      <div>
-        web_app:
-        {% if current_user.is_anonymous %}
-        <a href="{{ url_for('auth.login') }}">Login</a>
-        {% else %}
-        <a href="{{ url_for('index.monitor') }}">Monitor</a>
-        <a href="{{ url_for('get.candles') }}">Get Data</a>
-        <a href="{{ url_for('indicate.indicators') }}">Indicators</a>
-        <a href="{{ url_for('auth.logout') }}">Logout</a>
-        {% endif %}
-      </div>        
-      <hr>
-      {% with messages = get_flashed_messages() %}
-      {% if messages %}
-      <ul>
-        {% for message in messages %}
-        <li>{{ message }}</li>
-        {% endfor %}
-      </ul>
-      {% endif %}
-      {% endwith %}
+    </div>
+    <div class="container">
       {% block content %}{% endblock %}
-    </body>
+    </div>
+  </body>
+
 </html>
