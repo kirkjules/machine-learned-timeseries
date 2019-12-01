@@ -11,8 +11,8 @@ def get_data(ticker, granularity, db=True):
     """Function that enqueues indicator calculations in celery to be actioned
     by a rabbitmq backend."""
 
-    filename = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}\
-{granularity}.h5"
+    filename = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}/\
+{granularity}/price.h5"
     key = "/M"
 
     task_id = None
@@ -25,7 +25,14 @@ def get_data(ticker, granularity, db=True):
             return f"No data has been stored for {ticker} in {granularity} \
 intervals."
         task_id = entry.id
-        db_session.add(indicatorTask(get_id=task_id))
+        indicator = db_session.query(indicatorTask).get(task_id)
+        if indicator is None:
+            db_session.add(indicatorTask(get_id=task_id))
+        else:
+            for i in ['adx_status', 'atr_status', 'stochastic_status',
+                      'rsi_status', 'macd_status', 'ichimoku_status',
+                      'sma_status', 'status']:
+                setattr(indicator, i, 0)
         db_session.commit()
 
     get = tasks.load_data.s(filename, key)

@@ -5,6 +5,10 @@
 {% endblock %}
 
 {% block content %}
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+<script type="text/javascript" src="{{ url_for('static', filename='js/chosen.jquery.js') }}"></script>
+<link href="{{ url_for('static', filename='css/chosen.css') }}" rel="stylesheet"/>
+
 <div class="formwrapper">
   <h2 class="title">Generate Indicator Set</h2>
   <form action="" method="post" novalidate>
@@ -30,4 +34,11 @@
     {{ form.submit() }}
   </form>
 </div>
+<script type=text/javascript>
+  $(".chosen-select").chosen({
+    no_results_text: "Oops, nothing found!",
+    placeholder_text_multiple: "Select components.",
+    inherit_select_classes: true,
+  })
+</script>
 {% endblock %}

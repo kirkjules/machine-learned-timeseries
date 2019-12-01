@@ -6,7 +6,7 @@ from flask_login import LoginManager
 
 celery = Celery(__name__, broker=os.environ['CELERY_BROKER'])
 celery.conf.update(
-    result_backend=os.environ['CELERY_BACKEND'],
+    result_backend=f"db+{os.environ['DATABASE']}",  # CELERY_BACKEND'],
     accept_content=['pickle', 'json'],
     task_serializer='pickle',
     result_accept_content=['pickle', 'json'],

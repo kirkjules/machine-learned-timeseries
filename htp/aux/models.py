@@ -68,3 +68,16 @@ class indicatorTask(Base):
     ichimoku_status = Column(Integer)
     sma_status = Column(Integer)
     status = Column(Integer)
+
+
+class genSignalTask(Base):
+    __tablename__ = 'genSignalTask'
+    id = Column(UUID(as_uuid=True), primary_key=True, unique=True)
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("getTickerTask.id"))
+    sma_close_x = Column(String(15))
+    sma_close_y = Column(String(15))
+    trade_direction = Column(String(4))
+    exit_strategy = Column(String(20))
+    status = Column(Integer)
+    signal_count = Column(Integer)
+    batch_number = Column(Integer)

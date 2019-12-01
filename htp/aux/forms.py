@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, \
-    SelectMultipleField, SelectField, DateTimeField
+    SelectMultipleField, DateTimeField
 from wtforms.validators import DataRequired
 
 
@@ -29,7 +29,8 @@ class CandlesForm(FlaskForm):
 
 class IndicateForm(FlaskForm):
     ticker = StringField('Ticker', validators=[DataRequired()])
-    granularity = SelectField(
+    granularity = SelectMultipleField(
         'Granularity', validators=[DataRequired()], choices=[
-            ("M15", "M15"), ("H1", "H1"), ("H4", "H4")])
+            ("M15", "M15"), ("H1", "H1"), ("H4", "H4")],
+        render_kw={"class_": "chosen-select"})
     submit = SubmitField('Submit')

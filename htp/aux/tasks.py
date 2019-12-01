@@ -1,3 +1,4 @@
+import os
 import requests
 import pandas as pd
 from uuid import UUID
@@ -5,10 +6,11 @@ from htp import celery
 from htp.api import Api
 from celery import Task
 # from datetime import datetime
-from htp.analyse import indicator
 from htp.api.oanda import Candles
 from htp.aux.database import db_session
-from htp.aux.models import getTickerTask, subTickerTask, indicatorTask
+from htp.analyse import indicator, evaluate, observe
+from htp.aux.models import getTickerTask, subTickerTask, indicatorTask,\
+        genSignalTask
 
 
 class SessionTask(Task, Api):
@@ -110,9 +112,18 @@ def merge_data(results, ticker, price, granularity, task_id=None):
             total = pd.concat(d[k])
             total = total.loc[~total.index.duplicated(keep='first')]
             total.sort_index(inplace=True)
+            for s in total.columns:
+                total[s] = pd.to_numeric(
+                    total[s], errors='coerce', downcast='float')
 
-            filename = f"/Users/juleskirk/Documents/projects/htp/data/\
-{ticker}{k.split('/')[0]}.h5"
+            path = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}"
+            if not os.path.isdir(path):
+                os.mkdir(path)
+
+            if not os.path.isdir(path + f"/{k.split('/')[0]}"):
+                os.mkdir(path + f"/{k.split('/')[0]}")
+
+            filename = path + f"/{k.split('/')[0]}/price.h5"
 
             with pd.HDFStore(filename) as store:
                 # to maximise storage:
@@ -195,6 +206,107 @@ def set_momentum(df, task_id=None):
 def assemble(list_indicators, ticker, granularity, task_id=None):
     indicators = pd.concat(list_indicators, axis=1)
     filename = f"/Users/juleskirk/Documents/projects/htp/data/\
-{ticker}{granularity}indicators.h5"
+{ticker}/{granularity}/indicators.h5"
     indicators.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
     record(indicatorTask, ('status',), task_id=task_id)
+
+
+@celery.task
+def load_signal_data(data):
+    d = {}
+    for files in data:
+        with pd.HDFStore(files[0]) as store:  # filename
+            d[files[2]] = store[files[1]]  # key
+
+    sma = [s for s in d['target'].columns if "close_sma_" in s]
+    d['sys'] = d['target'][sma].copy()
+
+    d['target']['iky_cat'] = d['target'][
+        ['tenkan', 'kijun', 'senkou_A', 'senkou_B']].apply(
+            evaluate.iky_cat, axis=1)
+
+    i = ['%K', '%D', 'RSI', 'MACD', 'Signal', 'Histogram', 'ADX', 'ATR',
+         'iky_cat']
+    prop = d['target'][i].copy()
+    del d['target']
+    if 'sup' in d.keys():
+        d['sup']['iky_cat'] = d['sup'][
+            ['tenkan', 'kijun', 'senkou_A', 'senkou_B']].apply(
+                evaluate.iky_cat, axis=1)
+        sup_prop = d['sup'][i].copy()
+        del d['sup']
+        prop = prop.merge(
+            sup_prop, how="left", left_index=True, right_index=True,
+            suffixes=("_target", "_sup"))
+        prop.fillna(method="ffill", inplace=True)
+    else:
+        cols = {}
+        for label in i:
+            cols[label] = f"{label}_target"
+        prop.rename(columns=cols, inplace=True)
+
+    d['prop'] = prop
+    return d
+
+
+@celery.task
+def gen_signals(data, fast, slow, trade, ticker, granularity, atr_multiplier,
+                task_id=None):
+
+    if trade == 'buy':
+        entry = data['A']
+        exit = data['B']
+    elif trade == 'sell':
+        entry = data['B']
+        exit = data['A']
+
+    ATR = data['prop']['ATR_target'].copy().to_frame(name="ATR")
+    data_sys = data['sys'][[fast, slow]].copy()
+    sys_signals = evaluate.Signals.atr_stop_signals(
+        ATR, data['M'], entry, exit, data_sys, fast, slow,
+        atr_multiplier=atr_multiplier, trade=trade)
+
+    close_to_close = observe.close_in_atr(data['M'], ATR)
+    close_to_fast_signal = observe.close_to_signal_by_atr(
+        data['M'], data_sys, fast, ATR)
+    close_to_slow_signal = observe.close_to_signal_by_atr(
+        data['M'], data_sys, slow, ATR)
+
+    properties = pd.concat([data['prop'], close_to_close, close_to_fast_signal,
+                           close_to_slow_signal], axis=1)
+    properties = properties.shift(1)
+    for s in properties.columns:
+        if "ATR_" in s:
+            properties.drop([s], axis=1, inplace=True)
+
+    signals_with_properties = sys_signals.merge(
+        properties, how="inner", left_on="entry_datetime", right_index=True,
+        validate="1:1")
+
+    signals_with_properties["close_in_atr"] = pd.to_numeric(
+        signals_with_properties["close_in_atr"], errors="coerce",
+        downcast='integer')
+
+    # converts values from decimal objects into float32 and then float64 to
+    # round.
+    signals_with_properties["exit_price"] = pd.to_numeric(
+        signals_with_properties["exit_price"], errors="coerce",
+        downcast='float').astype(float)
+
+    if "JPY" in ticker:
+        signals_with_properties = signals_with_properties.round(
+            {"entry_price": 3, "exit_price": 3})
+    else:
+        signals_with_properties = signals_with_properties.round(
+            {"entry_price": 5, "exit_price": 5})
+
+    path = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}/\
+{granularity}/signals"
+    if not os.path.isdir(path):
+        os.mkdir(path)
+
+    signals_with_properties.to_hdf(
+        f"{path}/{fast}-{slow}.h5", 'S',  mode='w', format='table',
+        complevel=9)
+
+    record(genSignalTask, ('status',), task_id=task_id)

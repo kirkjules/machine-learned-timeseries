@@ -30,4 +30,5 @@ def close_to_signal_by_atr(mid, signal, signal_label, indicator):
     compare["close_to_signal_by_atr"] = (
         compare["close_to_signal"] / compare["ATR"]).round(2)
 
-    return compare["close_to_signal_by_atr"].to_frame().copy()
+    return compare["close_to_signal_by_atr"].to_frame().copy().rename(
+        columns={"close_to_signal_by_atr": f"close_to_{signal_label}_by_atr"})
