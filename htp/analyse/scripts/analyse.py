@@ -1,5 +1,6 @@
 """A command line script to generate indicator values from select ticker data.
 """
+import os
 import click
 from celery import group
 from htp.aux import tasks
@@ -11,8 +12,9 @@ def get_data(ticker, granularity, db=True):
     """Function that enqueues indicator calculations in celery to be actioned
     by a rabbitmq backend."""
 
-    filename = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}/\
-{granularity}/price.h5"
+    path = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}/\
+{granularity}/"
+    name = "price.h5"
     key = "/M"
 
     task_id = None
@@ -35,22 +37,27 @@ intervals."
                 setattr(indicator, i, 0)
         db_session.commit()
 
-    get = tasks.load_data.s(filename, key)
+    get = tasks.load_data.s(path + name, key)
 
     # Bulk indicator generation defines use case, indicators are used to teach
     # machine learning which system signals have the highest probability of
     # success. Intentionally removing data input is unecessary at this step in
     # the test flow.
-    header = group(
-        tasks.set_smooth_moving_average.s(task_id=task_id),
-        tasks.set_ichimoku_kinko_hyo.s(task_id=task_id),
-        tasks.set_moving_average_convergence_divergence.s(task_id=task_id),
-        tasks.set_stochastic.s(task_id=task_id),
-        tasks.set_relative_strength_index.s(task_id=task_id),
-        tasks.set_momentum.s(task_id=task_id)
-        )
+    path_to_ind = path + "indicators/"
+    if not os.path.isdir(path_to_ind):
+        os.mkdir(path_to_ind)
 
-    callback = tasks.assemble.s(ticker, granularity, task_id=task_id)
+    header = group(
+        tasks.set_smooth_moving_average.s(path_to_ind, task_id=task_id),
+        tasks.set_ichimoku_kinko_hyo.s(path_to_ind, task_id=task_id),
+        tasks.set_moving_average_convergence_divergence.s(
+            path_to_ind, task_id=task_id),
+        tasks.set_stochastic.s(path_to_ind, task_id=task_id),
+        tasks.set_relative_strength_index.s(path_to_ind, task_id=task_id),
+        tasks.set_momentum.s(path_to_ind, task_id=task_id)
+    )
+
+    callback = tasks.assemble.si(path, task_id=task_id)
 
     return (get | header | callback).delay()
 

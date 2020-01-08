@@ -4,7 +4,9 @@ import pandas as pd
 from uuid import UUID
 from htp import celery
 from htp.api import Api
+from copy import deepcopy
 from celery import Task
+from celery.result import AsyncResult
 # from datetime import datetime
 from htp.api.oanda import Candles
 from htp.aux.database import db_session
@@ -77,7 +79,7 @@ def session_get_data(
                 entry.status = 1
             db_session.commit()
             db_session.remove()
-        return (res, params["price"], params["granularity"])
+        return (res, params["price"], params["granularity"], self.request.id)
 
 
 def record(table, columns, task_id=None):
@@ -93,7 +95,7 @@ def record(table, columns, task_id=None):
         pass
 
 
-@celery.task
+@celery.task(ignore_result=True)
 def merge_data(results, ticker, price, granularity, task_id=None):
 
     d = {}
@@ -105,7 +107,8 @@ def merge_data(results, ticker, price, granularity, task_id=None):
     for result in results:
         if not isinstance(result[0], str):
             # params["granularity"]/params["price"]
-            d[f"{result[2]}/{result[1]}"].append(result[0])
+            d[f"{result[2]}/{result[1]}"].append(deepcopy(result[0]))
+        AsyncResult(result[3]).forget()
 
     for k in d.keys():
         if len(d[k]) > 0:
@@ -139,74 +142,88 @@ def merge_data(results, ticker, price, granularity, task_id=None):
             record(getTickerTask, ('status',), task_id=task_id[f"{k}"])
 
 
-@celery.task
+@celery.task()
 def load_data(filename, key):
     with pd.HDFStore(filename) as store:
         return store[key]
 
 
-@celery.task
-def set_smooth_moving_average(df, task_id=None):
+@celery.task()
+def set_smooth_moving_average(df, path, task_id=None):
     periods = [3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 20, 24, 25, 28, 30, 32,
                35, 36, 40, 48, 50, 60, 64, 70, 72, 80, 90, 96, 100]
     avgs = []
     for i in periods:
-        avg = indicator.smooth_moving_average(df, column="close", period=i)
+        avg = indicator.smooth_moving_average(df, column="close",
+                                              period=i)
         avgs.append(avg)
 
     r = pd.concat(avgs, axis=1)
+    filename = path + "smooth_moving_average.h5"
+    r.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
     record(indicatorTask, ('sma_status',), task_id=task_id)
-    return r
 
 
-@celery.task
-def set_ichimoku_kinko_hyo(df, task_id=None):
+@celery.task()
+def set_ichimoku_kinko_hyo(df, path, task_id=None):
     r = indicator.ichimoku_kinko_hyo(df)
+    filename = path + "ichimoku_kinko_hyo.h5"
+    r.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
     record(indicatorTask, ('ichimoku_status',), task_id=task_id)
-    return r
 
 
-@celery.task
-def set_moving_average_convergence_divergence(df, task_id=None):
+@celery.task()
+def set_moving_average_convergence_divergence(df, path, task_id=None):
     macd = indicator.moving_average_convergence_divergence(df)
     macd.drop(['emaF', 'emaS'], axis=1, inplace=True)
+    filename = path + "moving_average_convergence_divergence.h5"
+    macd.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
     record(indicatorTask, ('macd_status',), task_id=task_id)
-    return macd
 
 
-@celery.task
-def set_stochastic(df, task_id=None):
+@celery.task()
+def set_stochastic(df, path, task_id=None):
     stoch = indicator.stochastic(df)
     stoch.drop(['close', 'minN', 'maxN'], axis=1, inplace=True)
+    filename = path + "stochastic.h5"
+    stoch.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
     record(indicatorTask, ('stochastic_status',), task_id=task_id)
-    return stoch
 
 
-@celery.task
-def set_relative_strength_index(df, task_id=None):
+@celery.task()
+def set_relative_strength_index(df, path, task_id=None):
     rsi = indicator.relative_strength_index(df)
     rsi.drop(['avg_gain', 'avg_loss', 'RS'], axis=1, inplace=True)
+    filename = path + "relative_strength_index.h5"
+    rsi.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
     record(indicatorTask, ('rsi_status',), task_id=task_id)
-    return rsi
 
 
-@celery.task
-def set_momentum(df, task_id=None):
+@celery.task()
+def set_momentum(df, path, task_id=None):
     atr = indicator.Momentum.average_true_range(df)
     atr.drop(['HL', 'HpC', 'LpC', 'TR', 'r14TR'], axis=1, inplace=True)
     adx = indicator.Momentum.average_directional_movement(df)
     adx.drop(['+DI', '-DI', 'DX'], axis=1, inplace=True)
     r = atr.merge(adx, how="left", left_index=True, right_index=True,
                   validate="1:1")
+    filename = path + "momentum.h5"
+    r.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
     record(indicatorTask, ('atr_status', 'adx_status'), task_id=task_id)
-    return r
 
 
-@celery.task
-def assemble(list_indicators, ticker, granularity, task_id=None):
+@celery.task(ignore_result=True)
+def assemble(path, task_id=None):
+    list_indicators = []
+    for i in ["momentum", "relative_strength_index", "stochastic",
+              "moving_average_convergence_divergence", "smooth_moving_average",
+              "ichimoku_kinko_hyo"]:
+        with pd.HDFStore(path + "indicators/" + i + ".h5") as store:
+            list_indicators.append(store["/I"])
+        os.remove(path + "indicators/" + i + ".h5")
+    os.rmdir(path + "indicators/")
     indicators = pd.concat(list_indicators, axis=1)
-    filename = f"/Users/juleskirk/Documents/projects/htp/data/\
-{ticker}/{granularity}/indicators.h5"
+    filename = path + "indicators.h5"
     indicators.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
     record(indicatorTask, ('status',), task_id=task_id)
 

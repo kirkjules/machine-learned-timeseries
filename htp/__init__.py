@@ -5,6 +5,7 @@ from flask_login import LoginManager
 
 
 celery = Celery(__name__, broker=os.environ['CELERY_BROKER'])
+# result_backend="redis://localhost:6379/0",
 celery.conf.update(
     result_backend=f"db+{os.environ['DATABASE']}",  # CELERY_BACKEND'],
     accept_content=['pickle', 'json'],
@@ -12,10 +13,12 @@ celery.conf.update(
     result_accept_content=['pickle', 'json'],
     result_serializer='pickle',
     worker_send_task_events=True,
-    task_send_sent_event=True
+    task_send_sent_event=True,
+    result_chord_join_timeout=None
 )
 login = LoginManager()
 login.login_view = 'auth.login'
+# print(celery.conf.result_chord_join_timeout)
 
 
 def create_app():
@@ -43,5 +46,8 @@ def create_app():
 
     from htp.views import indicate
     app.register_blueprint(indicate.bp)
+
+    from htp.views import signal
+    app.register_blueprint(signal.bp)
 
     return app

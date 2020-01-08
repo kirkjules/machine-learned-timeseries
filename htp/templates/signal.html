@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/forms.css') }}" rel="stylesheet" type="text/css">
+{% endblock %}
+
+{% block content %}
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+<script type="text/javascript" src="{{ url_for('static', filename='js/chosen.jquery.js') }}"></script>
+<link href="{{ url_for('static', filename='css/chosen.css') }}" rel="stylesheet"/>
+
+<div class="formwrapper">
+  <h2 class="title">Download Ticker Data</h2>
+  <form action="" method="post" novalidate>
+    {{ form.hidden_tag() }}
+    <div class="form-field">{{ form.ticker.label }} {{ form.ticker }}
+      {% if form.ticker.errors %}
+        <ul class="errors">
+	  {% for error in form.ticker.errors %}
+	    <li>{{ error }}</li>
+	  {% endfor %}
+	</ul>
+      {% endif %}
+    </div>
+    <div class="form-field">{{ form.granularity.label }} {{ form.granularity }}
+      {% if form.granularity.errors %}
+        <ul class="errors">
+	  {% for error in form.granularity.errors %}
+	    <li>{{ error }}</li>
+	  {% endfor %}
+	</ul>
+      {% endif %}
+    </div>
+    <div class="form-field">{{ form.system.label }} {{ form.system }}
+      {% if form.system.errors %}
+        <ul class="errors">
+	  {% for error in form.system.errors %}
+	    <li>{{ error }}</li>
+	  {% endfor %}
+	</ul>
+      {% endif %}
+    </div>
+    {{ form.select_all.label }} {{ form.select_all }}
+    {{ form.submit() }}
+  </form>
+</div>
+<script type=text/javascript>
+
+  var update_select = function () {
+    if ($("#select_all").is(":checked")) {
+      $('#system').prop('disabled', true).trigger("chosen:updated");
+    }
+    else {
+      $('#system').prop('disabled', false).trigger("chosen:updated");
+    }
+  };
+
+  $(update_select);
+  $("#select_all").change(update_select);
+  $(".chosen-select").chosen({
+    no_results_text: "Oops, nothing found!",
+    placeholder_text_multiple: "Select price components.",
+    inherit_select_classes: true,
+})
+</script>
+{% endblock %}

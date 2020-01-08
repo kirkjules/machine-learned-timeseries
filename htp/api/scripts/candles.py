@@ -9,8 +9,8 @@ from htp.aux.database import db_session
 
 # imported celery app for chord to recognise backend.
 # unsure if this is required in production code, was working fine earlier.
-from htp import celery
-print(celery.conf.result_backend)
+# from htp import celery
+# print(celery.conf.result_backend)
 
 
 def arg_prep(queryParameters):
