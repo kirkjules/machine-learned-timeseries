@@ -14,8 +14,6 @@ def indicators():
     form = IndicateForm()
     if form.validate_on_submit():
         for interval in form.granularity.data:
-            print(form.ticker.data)
-            print(interval)
             get_data(
                 form.ticker.data, interval)
         return redirect(url_for('index.monitor'))

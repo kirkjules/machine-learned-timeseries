@@ -13,11 +13,13 @@ def signals():
 
     form = SignalForm()
     if form.validate_on_submit():
-        print(form.select_all.data)
-        print(form.system.data)
+        # print(form.ticker.data)
+        # print(form.granularity.data)
+        # print(form.system.data)
+        # print(form.select_all.data)
         for interval in form.granularity.data:
             get_data(
-                form.ticker.data, interval, form.system.data, db=False)
+                form.ticker.data, interval, form.system.data)
         return redirect(url_for('index.monitor'))
 
     return render_template('signal.html', form=form)

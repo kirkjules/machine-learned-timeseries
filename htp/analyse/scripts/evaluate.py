@@ -68,13 +68,14 @@ intervals."
         files.append((sup_indicators, 'I', 'sup'))
 
     load = tasks.load_signal_data.s(files)
+    # return load.delay()
 
     s = []
     for k in system:
         for trade in ['buy', 'sell']:
             s.append(tasks.gen_signals.s(
-                k.split(' ')[0], k.split(' ')[1], trade, ticker, granularity,
-                6, task_id=ids[k][trade]))
+                k.split(' ')[0], k.split(' ')[1], trade, ticker,
+                granularity.split(" ")[0], 6, task_id=ids[k][trade]))
     gen = group(s)
 
     return (load | gen).delay()

@@ -1,4 +1,5 @@
 import os
+# import sys
 import requests
 import pandas as pd
 from uuid import UUID
@@ -264,9 +265,14 @@ def load_signal_data(data):
 
     d['prop'] = prop
     return d
+    # testing
+    # print(sys.getsizeof(d))
+    # for i in d.keys():
+    #     print(f"{i}: {len(d[i])}")
+    #     print(d[i].columns)
 
 
-@celery.task
+@celery.task(ignore_result=True)
 def gen_signals(data, fast, slow, trade, ticker, granularity, atr_multiplier,
                 task_id=None):
 
@@ -291,7 +297,8 @@ def gen_signals(data, fast, slow, trade, ticker, granularity, atr_multiplier,
 
     properties = pd.concat([data['prop'], close_to_close, close_to_fast_signal,
                            close_to_slow_signal], axis=1)
-    properties = properties.shift(1)
+    properties = properties.shift(1)  # very important, match most recent known
+    # property to proceeding timestamp where trade is entered.
     for s in properties.columns:
         if "ATR_" in s:
             properties.drop([s], axis=1, inplace=True)
@@ -323,7 +330,7 @@ def gen_signals(data, fast, slow, trade, ticker, granularity, atr_multiplier,
         os.mkdir(path)
 
     signals_with_properties.to_hdf(
-        f"{path}/{fast}-{slow}.h5", 'S',  mode='w', format='table',
+        f"{path}/{trade}-{fast}-{slow}.h5", 'S',  mode='w', format='table',
         complevel=9)
 
     record(genSignalTask, ('status',), task_id=task_id)

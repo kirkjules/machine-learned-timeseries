@@ -469,9 +469,10 @@ class Signals:
             timestamp.
         """
         if isinstance(row[target], Decimal):
-            if trade == "buy" and float(row["exit_low"]) < row[target]:
+            if trade == "buy" and float(row["exit_low"]) < float(row[target]):
                 return True
-            elif trade == "sell" and float(row["exit_high"]) > row[target]:
+            elif trade == "sell" and float(row["exit_high"]) > float(
+              row[target]):
                 return True
         else:
             return False

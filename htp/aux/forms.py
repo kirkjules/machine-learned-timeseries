@@ -61,7 +61,7 @@ class SignalForm(FlaskForm):
 tick select all.")
             return False
         elif self.select_all.data:
-            self.system.data = systems
+            self.system.data = [s[1] for s in systems]
             return True
         else:
             return True
