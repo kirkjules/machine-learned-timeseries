@@ -104,12 +104,13 @@ class Signals:
     2019-08-20 17:45:00        NaN          NaN       NaN         NaN          exit
     """
     def __init__(self, df_mid, df_entry, df_exit, df_sys, fast, slow,
-                 trade="buy", stop_delta=0.5):
+                 trade="buy", stop_delta=0.5, rounder=3):
 
         self.trade = trade
         self.df_mid = df_mid
         self.df_entry = df_entry
         self.df_exit = df_exit
+        self.rounder = rounder
 
         self.stop_delta = abs(stop_delta)
         if trade == "buy":
@@ -131,7 +132,8 @@ class Signals:
         sys_entry_exit.set_index("exit_dt", inplace=True)
 
         sys_entry_exit["stop_loss_by_limit"] = sys_entry_exit.apply(
-            self._stop_loss_by_limit, pips=self.stop_delta, axis=1)
+            self._stop_loss_by_limit, pips=self.stop_delta, axis=1,
+            exp=self.rounder)
         sys_entry_exit["stop_loss_by_limit"].fillna(
             method="ffill", inplace=True)
 
@@ -265,7 +267,8 @@ class Signals:
         stop_loss["prev_close_1"] = stop_loss["close_x"].shift(1)
         stop_loss["prev_close_2"] = stop_loss["close_x"].shift(2)
         stop_loss["stop_loss_by_ATR"] = stop_loss.apply(
-            k._stop_loss_by_atr, args=(atr_multiplier, k.trade,), axis=1)
+            k._stop_loss_by_atr, args=(atr_multiplier, k.trade,), axis=1,
+            exp=k.rounder)
         stop_loss["stop_loss_by_ATR"].fillna(method="ffill", inplace=True)
         stop_loss["ex_type_by_ATR"] = stop_loss.apply(
             k._signal_stop_loss, args=("stop_loss_by_ATR", k.trade), axis=1)
@@ -419,24 +422,26 @@ class Signals:
             If the trade is no longer live.
         """
         if isinstance(row["stop_loss_by_limit"], Decimal):
-            if trade == "buy" and row["prev_close_1"] > row["prev_close_2"]:
-                stop = (
-                    Decimal(str(row["open_x"])) +
-                    (Decimal(str(row["ATR"])) *
-                     Decimal(str(-multiplier))
-                     )
-                ).quantize(
-                    Decimal(f".{'1'.zfill(exp)}"), rounding=ROUND_HALF_EVEN)
-            elif trade == "sell" and row["prev_close_1"] < row["prev_close_2"]:
-                stop = (
-                    Decimal(str(row["open_x"])) +
-                    (Decimal(str(row["ATR"])) *
-                     Decimal(str(multiplier))
-                     )
-                ).quantize(
-                    Decimal(f".{'1'.zfill(exp)}"), rounding=ROUND_HALF_EVEN)
-            else:
-                stop = np.nan
+            if trade == "buy":
+                if row["prev_close_1"] > row["prev_close_2"] or\
+                  row["entry_type"] is True:
+                    stop = (Decimal(str(row["open_x"])) +
+                            (Decimal(str(row["ATR"])) *
+                            Decimal(str(-multiplier)))).quantize(
+                                Decimal(f".{'1'.zfill(exp)}"),
+                                rounding=ROUND_HALF_EVEN)
+                else:
+                    stop = np.nan
+            elif trade == "sell":
+                if row["prev_close_1"] < row["prev_close_2"] or\
+                  row["entry_type"] is True:
+                    stop = (Decimal(str(row["open_x"])) +
+                            (Decimal(str(row["ATR"])) *
+                            Decimal(str(multiplier)))).quantize(
+                                Decimal(f".{'1'.zfill(exp)}"),
+                                rounding=ROUND_HALF_EVEN)
+                else:
+                    stop = np.nan
             return stop
         else:
             return "exit"
@@ -497,11 +502,16 @@ class Signals:
         d = []
         en = False
         signal_data = {}
+        stop_ind = 4
+        for col in df.columns:
+            if "stop_loss_by_" in col:
+                stop_ind = list(df.columns).index(col) + 1
 
         for row in df.itertuples():
             if row[1] is True and en is False:
                 signal_data["entry_datetime"] = row[0]
                 signal_data["entry_price"] = row[2]
+                signal_data["stop_loss"] = row[stop_ind]
                 en = True
             elif row[6] is True and en is True:
                 signal_data["exit_datetime"] = row[0]

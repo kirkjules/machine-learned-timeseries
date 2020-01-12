@@ -405,12 +405,16 @@ def count(trades, ticker, amount, RISK_PERC, trade_type):
             * Decimal(f"{KNOWN_RATIO[0]}")).quantize(Decimal(".1")), axis=1)
 
     d_pos_size = {}
+    if conv:
+        conv_entry = list(trades.columns).index('conv_entry_price')
+        conv_exit = list(trades.columns).index('conv_exit_price')
+
     for trade in trades.itertuples():
         size = Position.size(
-            ticker, AMOUNT, RISK_PERC, CONV=trade[5], STOP=trade[6])
+            ticker, AMOUNT, RISK_PERC, CONV=conv_entry, STOP=trade[5])
         profit = profit_loss(
             ticker, ENTRY=trade[2], EXIT=trade[4], POS_SIZE=size,
-            CONV=trade[5], TRADE=trade_type)
+            CONV=conv_exit, TRADE=trade_type)
         AMOUNT += profit
         d_pos_size[trade[1]] = {
             "POS_SIZE": size, "P/L AUD": profit, "P/L REALISED": AMOUNT}

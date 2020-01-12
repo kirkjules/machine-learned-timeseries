@@ -40,6 +40,8 @@ class getTickerTask(Base):
     price = Column(String(1))
     granularity = Column(String(3))
     status = Column(Integer)
+    _from = Column(DateTime())
+    to = Column(DateTime())
     get_subtasks = relationship("subTickerTask", backref="getTickerTask")
     indicator_tasks = relationship(
         "indicatorTask", backref=backref("getTickerTask", uselist=False))

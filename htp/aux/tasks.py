@@ -283,11 +283,16 @@ def gen_signals(data, fast, slow, trade, ticker, granularity, atr_multiplier,
         entry = data['B']
         exit = data['A']
 
+    if 'JPY' in ticker:
+        rounder = 3
+    else:
+        rounder = 5
+
     ATR = data['prop']['ATR_target'].copy().to_frame(name="ATR")
-    data_sys = data['sys'][[fast, slow]].copy()
+    data_sys = data['sys'][[fast, slow]].copy().dropna()
     sys_signals = evaluate.Signals.atr_stop_signals(
         ATR, data['M'], entry, exit, data_sys, fast, slow,
-        atr_multiplier=atr_multiplier, trade=trade)
+        atr_multiplier=atr_multiplier, trade=trade, rounder=rounder)
 
     close_to_close = observe.close_in_atr(data['M'], ATR)
     close_to_fast_signal = observe.close_to_signal_by_atr(
@@ -313,16 +318,13 @@ def gen_signals(data, fast, slow, trade, ticker, granularity, atr_multiplier,
 
     # converts values from decimal objects into float32 and then float64 to
     # round.
-    signals_with_properties["exit_price"] = pd.to_numeric(
-        signals_with_properties["exit_price"], errors="coerce",
-        downcast='float').astype(float)
+    for col in ["exit_price", "stop_loss"]:
+        signals_with_properties[col] = pd.to_numeric(
+            signals_with_properties[col], errors="coerce",
+            downcast='float').astype(float)
 
-    if "JPY" in ticker:
-        signals_with_properties = signals_with_properties.round(
-            {"entry_price": 3, "exit_price": 3})
-    else:
-        signals_with_properties = signals_with_properties.round(
-            {"entry_price": 5, "exit_price": 5})
+    signals_with_properties = signals_with_properties.round(
+        {"entry_price": rounder, "exit_price": rounder, "stop_loss": rounder})
 
     path = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}/\
 {granularity}/signals"

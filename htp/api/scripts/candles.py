@@ -3,8 +3,9 @@ from celery import chord
 from copy import deepcopy
 from uuid import uuid4, UUID
 from htp.toolbox import dates
-from htp.aux import tasks, models
+from htp.aux import tasks
 from htp.aux.database import db_session
+from htp.aux.models import getTickerTask, subTickerTask
 
 
 # imported celery app for chord to recognise backend.
@@ -31,7 +32,42 @@ def arg_prep(queryParameters):
 
 
 def get_data(ticker, price, granularity, from_, to, smooth, db=True):
+    """Function to initiate ticker data download and entry logging in a
+    database.
 
+    Parameters
+    ----------
+    ticker : str
+       The target instrument to be queried using the preset function for a
+       given endpoint.
+    price : str
+       The candle type for which ticker data should be sourced.
+    granularity : str
+       The time interval the define the period which defines the timeseries
+       data.
+    from_ : datetime.datetime
+       The startpoint from which data should be downloaded.
+    to : datetime.datetime
+       The endpoint to which data should be downloaded.
+    smooth : bool
+       A flag that the api endpoint accepts to ensure the close and open
+       values for adjacent candles match.
+    db : bool
+       A flag to ensure the query is logged in the database.
+
+    Returns
+    -------
+      None
+
+    Notes
+    -----
+    - If the data download is successfull the timeseries will be saved as a
+    pytable in a HDF file, under an automatically generated directory structure
+    that sits below the data folder in the root directory.
+    - The database logging functionality is designed to recylce pre-existing
+    rows that match the same ticker, price and granularity criteris, updating
+    the from_ and to values accordingly.
+    """
     _ids = {}
     header = []
     for val in price:
@@ -42,10 +78,21 @@ def get_data(ticker, price, granularity, from_, to, smooth, db=True):
 
             _ids[f"{interval}/{val}"] = None
             if db:
-                _ids[f"{interval}/{val}"] = uuid4()
-                db_session.add(models.getTickerTask(
-                    id=_ids[f"{interval}/{val}"], ticker=ticker, price=val,
-                    granularity=interval))
+                entry = db_session.query(getTickerTask).filter(
+                    getTickerTask.ticker == ticker, getTickerTask.price ==
+                    val, getTickerTask.granularity == interval).first()
+                if entry is None:
+                    _ids[f"{interval}/{val}"] = uuid4()
+                    db_session.add(getTickerTask(
+                        id=_ids[f"{interval}/{val}"], ticker=ticker, price=val,
+                        granularity=interval, _from=from_, to=to))
+                else:
+                    _ids[f"{interval}/{val}"] = entry.id
+                    setattr(entry, "_from", from_)
+                    setattr(entry, "to", to)
+                    db_session.query(subTickerTask).filter(
+                        subTickerTask.get_id == entry.id).delete(
+                            synchronize_session=False)
 
             param_set = arg_prep(args)
             for params in param_set:
@@ -55,7 +102,7 @@ def get_data(ticker, price, granularity, from_, to, smooth, db=True):
                 # print(g.id)
                 header.append(g)
                 if db:
-                    db_session.add(models.subTickerTask(
+                    db_session.add(subTickerTask(
                         id=UUID(g.id), get_id=_ids[f"{interval}/{val}"],
                         _from=params["from"], to=params["to"]))
 
