@@ -3,6 +3,7 @@ A collection of technical indicators that apply to timeseries in pandas
 DataFrame format.
 """
 
+import numpy as np
 import pandas as pd
 from decimal import Decimal
 
@@ -291,24 +292,27 @@ def stochastic(data, period=14, smoothK=1, smoothD=3):
     Examples
     --------
     >>> import pandas as pd
-    >>> with pd.HDFStore("data/AUD_JPY_M15.h5") as store:
-    ...     data = store["data_mid"]
+    >>> with pd.HDFStore("data/EUR_USD/M15/price.h5") as store:
+    ...     data = store["M"]
     >>> stochastic(data).tail()
-                          close    minN    maxN       %K       %D
-    2018-10-04 19:00:00  80.562  80.381  81.088  25.6011  21.0681
-    2018-10-04 20:00:00  80.646  80.381  81.056  39.2593  29.6824
-    2018-10-04 21:00:00  80.590  80.381  81.028  32.3029  32.3878
-    2018-10-04 22:00:00  80.624  80.381  81.028  37.5580  36.3734
-    2018-10-04 23:00:00  80.648  80.381  81.028  41.2674  37.0428
+                              %K       %D
+    2019-11-29 20:45:00   6.8583  15.0773
+    2019-11-29 21:00:00  19.4767  15.1739
+    2019-11-29 21:15:00  29.8653  18.7334
+    2019-11-29 21:30:00  74.0207  41.1209
+    2019-11-29 21:45:00  47.2185  50.3682
     """
-    minN = data["low"].rolling(period).min().rename("minN")
-    maxN = data["high"].rolling(period).max().rename("maxN")
-    s = pd.concat([pd.to_numeric(data["close"]), minN, maxN], axis=1)
-    s["%K"] = s.apply(
-        lambda x: 100 * (x["close"] - x["minN"]) / (x["maxN"] - x["minN"]),
-        axis=1).rolling(smoothK).mean()
+    minN = data["low"].rolling(period).min().to_numpy()
+    maxN = data["high"].rolling(period).max().to_numpy()
+    nominator = data.close.values - minN
+    denominator = maxN - minN
+    k = np.divide(nominator, denominator, out=np.zeros_like(nominator),
+                  where=denominator != 0)
+    percK = k * 100
+    s = pd.DataFrame(data=percK, index=data.index, columns=['K'])
+    s["%K"] = s["K"].rolling(smoothK).mean()
+    s.drop('K', axis=1, inplace=True)
     s["%D"] = s["%K"].rolling(smoothD).mean()
-
     return s.round(4)
 
 
@@ -488,6 +492,92 @@ class Momentum:
 
     def __init__(self, data, period=14):
 
+        self.index = data.index
+        self.high = data.high.to_numpy()
+        self.low = data.low.to_numpy()
+        self.close = data.close.to_numpy()
+
+        HL = self.high - self.low
+        HpC = np.absolute(self.high - np.roll(self.close, 1))
+        LpC = np.absolute(self.low - np.roll(self.close, 1))
+
+        TR = np.amax(np.stack((HL, HpC, LpC), axis=-1), axis=1)
+        TR[0] = HL[0]
+        self.TR = TR
+
+    def _w_avg_a(self, a, ind=14):
+        with np.nditer([a, None]) as it:
+            X = 0
+            count = 0
+            prevX = 0
+            for x, y in it:
+                if count < ind - 1:
+                    y[...] = np.nan
+                elif count == ind - 1:
+                    X = np.mean(a[ind - 14:ind])
+                    y[...] = X
+                elif count > ind - 1:
+                    X = (prevX * 13 + x) / 14
+                    y[...] = X
+                prevX = X
+                count += 1
+            return it.operands[1]
+
+    @classmethod
+    def average_true_range(cls, *args, **kwargs):
+        base = cls(*args, **kwargs)
+        atr = base._w_avg_a(base.TR)
+        return pd.DataFrame(
+            data=atr, index=base.index, columns=['ATR']).round(5)
+
+    @classmethod
+    def average_directional_movement(cls, *args, **kwargs):
+        """
+        Function to calculate the average directional movement index for a
+        given ticker's timeseries data.
+        """
+
+        base = cls(*args, **kwargs)
+        HpH = base.high - np.roll(base.high, 1)
+        pLL = np.roll(base.low, 1) - base.low
+        DMp = np.where(np.greater(HpH, pLL) & np.greater(HpH, 0), HpH, 0)
+        DMm = np.where(np.greater(pLL, HpH) & np.greater(pLL, 0), pLL, 0)
+        DM = np.stack((DMp, DMm, base.TR), axis=-1)
+        DI = base._w_avg_b(DM)
+        DIp = DI[:, 0] / DI[:, 2] * 100
+        DIm = DI[:, 1] / DI[:, 2] * 100
+        DX = np.absolute(DIp - DIm) / np.absolute(DIp + DIm) * 100
+        adx = base._w_avg_a(DX, ind=28)
+        return pd.DataFrame(
+            data=adx, index=base.index, columns=['ADX']).round(5)
+
+    def _w_avg_b(self, a):
+        with np.nditer([a, None]) as it:
+            X = 0
+            col = 1
+            count = 1
+            prevX = np.zeros(3)
+            for x, y in it:
+                if count < 15:
+                    y[...] = np.nan
+                elif count == 15:
+                    X = np.sum(a[1:15, col - 1])
+                    y[...] = X
+                elif count > 15:
+                    X = prevX[col - 1] - (prevX[col - 1] / 14) + x
+                    y[...] = X
+                prevX[col - 1] = X
+                if col < 3:
+                    col += 1
+                elif col == 3:
+                    col = 1
+                    count += 1
+            return it.operands[1]
+
+
+class Momentum2:
+
+    def __init__(self, data, period=14):
         self.high = pd.to_numeric(data["high"], errors="coerce")
         self.low = pd.to_numeric(data["low"], errors="coerce")
         self.close = pd.to_numeric(data["close"], errors="coerce")
@@ -552,10 +642,6 @@ class Momentum:
 
         return d
 
-    @classmethod
-    def average_true_range(cls, *args, **kwargs):
-        return cls(*args, **kwargs).atr
-
     def _ADX_DM_logic(self, row, colA, colB):
         # not optimised
         if row[colA] > row[colB] and row[colA] > 0:
@@ -565,10 +651,6 @@ class Momentum:
 
     @classmethod
     def average_directional_movement(cls, *args, **kwargs):
-        """
-        Function to calculate the average directional movement index for a
-        given ticker's timeseries data.
-        """
         n = cls(*args, **kwargs)
         HpH = (n.high - n.high.shift(1)).rename("HpH")
         pLL = (n.low.shift(1) - n.low).rename("pLL")

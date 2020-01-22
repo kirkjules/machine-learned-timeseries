@@ -374,7 +374,7 @@ def profit_loss(ticker, ENTRY=1.0, EXIT=1.1, POS_SIZE=2500, CONV=1.0,
             Decimal("0.01"), rounding=ROUND_HALF_EVEN)
 
 
-def count(trades, ticker, amount, RISK_PERC, trade_type):
+def count(trades, ticker, amount, RISK_PERC, trade_type, conv=False):
     """
     Function to calculate trade information: P/L Pips, P/L AUD, Position Size,
     Realised P/L.
@@ -399,24 +399,35 @@ def count(trades, ticker, amount, RISK_PERC, trade_type):
     else:
         KNOWN_RATIO = (10000, 0.0001)
 
+    coeff = {'sell': -1, 'buy': 1}
+
     trades["P/L PIPS"] = trades.apply(
         lambda x: (
             (Decimal(x["exit_price"]) - Decimal(x["entry_price"]))
-            * Decimal(f"{KNOWN_RATIO[0]}")).quantize(Decimal(".1")), axis=1)
+            * Decimal(f"{KNOWN_RATIO[0]}") * coeff[trade_type]).quantize(
+                Decimal(".1")), axis=1)
 
     d_pos_size = {}
+    stop = list(trades.columns).index('stop_loss') + 1
+    exit = list(trades.columns).index('exit_price') + 1
+    entry = list(trades.columns).index('entry_price') + 1
+    entry_dt = list(trades.columns).index('entry_datetime') + 1
     if conv:
-        conv_entry = list(trades.columns).index('conv_entry_price')
-        conv_exit = list(trades.columns).index('conv_exit_price')
+        conv_entry = list(trades.columns).index('conv_entry_price') + 1
+        conv_exit = list(trades.columns).index('conv_exit_price') + 1
+    else:
+        conv_entry = None
+        conv_exit = None
 
     for trade in trades.itertuples():
         size = Position.size(
-            ticker, AMOUNT, RISK_PERC, CONV=conv_entry, STOP=trade[5])
+            ticker, AMOUNT, RISK_PERC, CONV=trade[conv_entry],
+            STOP=trade[stop])
         profit = profit_loss(
-            ticker, ENTRY=trade[2], EXIT=trade[4], POS_SIZE=size,
+            ticker, ENTRY=trade[entry], EXIT=trade[exit], POS_SIZE=size,
             CONV=conv_exit, TRADE=trade_type)
         AMOUNT += profit
-        d_pos_size[trade[1]] = {
+        d_pos_size[trade[entry_dt]] = {
             "POS_SIZE": size, "P/L AUD": profit, "P/L REALISED": AMOUNT}
     counting = pd.DataFrame.from_dict(d_pos_size, orient="index")
     entry_exit_complete = trades.merge(

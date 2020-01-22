@@ -15,7 +15,7 @@ class Predict:
     def __init__(self, results_with_properties, training_size, shuffle=True,
                  test_size=0.1, feature_selection=True):
 
-        train = results_with_properties[0:training_size].copy()
+        train = results_with_properties.iloc[0:training_size].copy()
 
         self.X_train, self.X_test, self.y_train, self.y_test = data_split(
             train.drop("win_loss", axis=1), train["win_loss"], random_state=42,

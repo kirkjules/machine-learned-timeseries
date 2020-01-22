@@ -276,23 +276,19 @@ def load_signal_data(data):
 def gen_signals(data, fast, slow, trade, ticker, granularity, atr_multiplier,
                 task_id=None):
 
-    if trade == 'buy':
-        entry = data['A']
-        exit = data['B']
-    elif trade == 'sell':
-        entry = data['B']
-        exit = data['A']
+    price = {'buy': {'entry': data['A'], 'exit': data['B']},
+             'sell': {'entry': data['B'], 'entry': data['A']}}
 
     if 'JPY' in ticker:
-        rounder = 3
+        exp = 3
     else:
-        rounder = 5
+        exp = 5
 
     ATR = data['prop']['ATR_target'].copy().to_frame(name="ATR")
     data_sys = data['sys'][[fast, slow]].copy().dropna()
     sys_signals = evaluate.Signals.atr_stop_signals(
-        ATR, data['M'], entry, exit, data_sys, fast, slow,
-        atr_multiplier=atr_multiplier, trade=trade, rounder=rounder)
+        ATR, data['M'], price[trade]['entry'], price[trade]['exit'], data_sys,
+        fast, slow, atr_multiplier=atr_multiplier, trade=trade, rounder=exp)
 
     close_to_close = observe.close_in_atr(data['M'], ATR)
     close_to_fast_signal = observe.close_to_signal_by_atr(
