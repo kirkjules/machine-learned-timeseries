@@ -37,29 +37,29 @@ intervals."
                 setattr(indicator, i, 0)
         db_session.commit()
 
-    get = tasks.load_data.s(path + name, key)
+    # get = tasks.load_data.s(path + name, key)
 
     # Bulk indicator generation defines use case, indicators are used to teach
     # machine learning which system signals have the highest probability of
     # success. Intentionally removing data input is unecessary at this step in
     # the test flow.
-    path_to_ind = path + "indicators/"
-    if not os.path.isdir(path_to_ind):
-        os.mkdir(path_to_ind)
+    # path_to_ind = path + "indicators/"
+    # if not os.path.isdir(path_to_ind):
+    #     os.mkdir(path_to_ind)
 
-    header = group(
-        tasks.set_smooth_moving_average.s(path_to_ind, task_id=task_id),
-        tasks.set_ichimoku_kinko_hyo.s(path_to_ind, task_id=task_id),
-        tasks.set_moving_average_convergence_divergence.s(
-            path_to_ind, task_id=task_id),
-        tasks.set_stochastic.s(path_to_ind, task_id=task_id),
-        tasks.set_relative_strength_index.s(path_to_ind, task_id=task_id),
-        tasks.set_momentum.s(path_to_ind, task_id=task_id)
-    )
+    # header = group(
+    #     tasks.set_smooth_moving_average.s(path_to_ind, task_id=task_id),
+    #     tasks.set_ichimoku_kinko_hyo.s(path_to_ind, task_id=task_id),
+    #     tasks.set_moving_average_convergence_divergence.s(
+    #         path_to_ind, task_id=task_id),
+    #     tasks.set_stochastic.s(path_to_ind, task_id=task_id),
+    #     tasks.set_relative_strength_index.s(path_to_ind, task_id=task_id),
+    #     tasks.set_momentum.s(path_to_ind, task_id=task_id)
+    # )
 
-    callback = tasks.assemble.si(path, task_id=task_id)
+    # callback = tasks.assemble.si(path, task_id=task_id)
 
-    return (get | header | callback).delay()
+    # return (get | header | callback).delay()
 
 
 @click.command()

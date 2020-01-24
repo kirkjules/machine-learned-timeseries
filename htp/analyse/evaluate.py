@@ -102,6 +102,10 @@ class Signals:
     2019-08-20 17:15:00        NaN          NaN      True      72.053          exit
     2019-08-20 17:30:00        NaN          NaN       NaN         NaN          exit
     2019-08-20 17:45:00        NaN          NaN       NaN         NaN          exit
+
+    Notes
+    -----
+    10.2 s ± 1.17 s per loop (mean ± std. dev. of 7 runs, 1 loop each)
     """
     def __init__(self, df_mid, df_entry, df_exit, df_sys, fast, slow,
                  trade="buy", stop_delta=0.5, rounder=3):
@@ -274,9 +278,9 @@ class Signals:
             k._signal_stop_loss, args=("stop_loss_by_ATR", k.trade), axis=1)
 
         return k._generate_trades(
-            stop_loss[
-                ["entry_type", "entry_price", "exit_type", "exit_price",
-                 "stop_loss_by_ATR", "ex_type_by_ATR"]])
+          stop_loss[
+            ["entry_type", "entry_price", "exit_type", "exit_price",
+             "stop_loss_by_ATR", "ex_type_by_ATR"]])
 
     def _signal(self, df_sys, fast, slow, trade="buy", df_price=None,
                 signal="entry", price="open"):

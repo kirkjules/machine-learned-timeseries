@@ -56,15 +56,15 @@ def smooth_moving_average(df1, df2=None, column="close", period=10,
     2019-08-20 20:30:00       71.998       72.004        72.019        72.047
     2019-08-20 20:45:00       71.997       71.998        72.016        72.043
     """
-    rn = abs(Decimal(str(df1.iloc[0, 3])).as_tuple().exponent)
-    sma = df1[column].rolling(period).mean().round(rn).to_frame(
+    # rn = abs(Decimal(str(df1.iloc[0, 3])).as_tuple().exponent)
+    sma = df1[column].rolling(period).mean().round(6).to_frame(
         name="{}_sma_{}".format(column, period))
 
     if concat:
         out = pd.concat([sma, df2], axis=1)
         return out
 
-    return sma.round(4)
+    return sma.round(6)
 
 
 def ichimoku_kinko_hyo(data, conv=9, base=26, lead=52):
@@ -143,7 +143,7 @@ def ichimoku_kinko_hyo(data, conv=9, base=26, lead=52):
             1).shift(26).to_frame(name="senkou_B")
 
     return pd.concat([tenkan, kijun, chikou, senkou_A, senkou_B],
-                     axis=1).round(4)
+                     axis=1).round(6)
 
 
 def relative_strength_index(data, period=14):
@@ -234,7 +234,7 @@ def relative_strength_index(data, period=14):
     rs = pd.DataFrame.from_dict(r, orient="index")
     rs["RSI"] = rs.apply(lambda x: 100 - (100 / (1 + x["RS"])), axis=1)
 
-    return rs.round(4)
+    return rs.round(6)
 
 
 def stochastic(data, period=14, smoothK=1, smoothD=3):
@@ -313,7 +313,7 @@ def stochastic(data, period=14, smoothK=1, smoothD=3):
     s["%K"] = s["K"].rolling(smoothK).mean()
     s.drop('K', axis=1, inplace=True)
     s["%D"] = s["%K"].rolling(smoothD).mean()
-    return s.round(4)
+    return s.round(6)
 
 
 def moving_average_convergence_divergence(data, fast=12, slow=26, signal=9):
@@ -398,7 +398,7 @@ def moving_average_convergence_divergence(data, fast=12, slow=26, signal=9):
         span=signal, min_periods=signal).mean()
     e["Histogram"] = e["MACD"] - e["Signal"]
 
-    return e.round(4)
+    return e.round(6)
 
 
 class Momentum:
@@ -528,7 +528,7 @@ class Momentum:
         base = cls(*args, **kwargs)
         atr = base._w_avg_a(base.TR)
         return pd.DataFrame(
-            data=atr, index=base.index, columns=['ATR']).round(5)
+            data=atr, index=base.index, columns=['ATR']).round(6)
 
     @classmethod
     def average_directional_movement(cls, *args, **kwargs):
@@ -549,7 +549,7 @@ class Momentum:
         DX = np.absolute(DIp - DIm) / np.absolute(DIp + DIm) * 100
         adx = base._w_avg_a(DX, ind=28)
         return pd.DataFrame(
-            data=adx, index=base.index, columns=['ADX']).round(5)
+            data=adx, index=base.index, columns=['ADX']).round(6)
 
     def _w_avg_b(self, a):
         with np.nditer([a, None]) as it:
@@ -573,122 +573,6 @@ class Momentum:
                     col = 1
                     count += 1
             return it.operands[1]
-
-
-class Momentum2:
-
-    def __init__(self, data, period=14):
-        self.high = pd.to_numeric(data["high"], errors="coerce")
-        self.low = pd.to_numeric(data["low"], errors="coerce")
-        self.close = pd.to_numeric(data["close"], errors="coerce")
-
-        HL = (self.high - self.low).rename("HL")
-        HpC = (self.high - self.close.shift(1)).abs().rename("HpC")
-        LpC = (self.low - self.close.shift(1)).abs().rename("LpC")
-
-        tr = pd.concat([HL, HpC, LpC], axis=1)
-        tr["TR"] = tr.max(axis=1)
-
-        d = self._wilder_average_a(tr, "TR", period)
-        ATR = pd.DataFrame.from_dict(
-            d, orient="index").rename(columns={0: "ATR"})
-
-        atr = tr.merge(
-            ATR, how="left", left_index=True, right_index=True, validate="1:1")
-        self.atr = atr.round(4)
-        self.period = period
-
-    def _wilder_average_a(self, df, column, length):
-
-        d = {}
-        X = 0
-        prevX = 0
-        count = 0
-        df[f"r{length}{column}"] = df[column].rolling(length).mean()
-        col_ind = ([i for i in df.columns].index(column) + 1)
-        col_mean_ind = ([
-            i for i in df.columns].index(f"r{length}{column}") + 1)
-        for row in df.itertuples():
-            if count == length:
-                X = row[col_mean_ind]  # [f"r{length}{column}"]
-                d[row[0]] = X
-            elif count > length:
-                X = (prevX * (length - 1) + row[col_ind]) / length  # [column]
-                d[row[0]] = X
-            prevX = X
-            count += 1
-
-        return d
-
-    def _wilder_average_b(self, df, column, length):
-
-        d = {}
-        X = 0
-        prevX = 0
-        count = 0
-        df[f"r{length}{column}"] = df[column].rolling(length).sum()
-        col_ind = ([i for i in df.columns].index(column) + 1)
-        col_mean_ind = (
-            [i for i in df.columns].index(f"r{length}{column}") + 1)
-        for row in df.itertuples():
-            if count == length:
-                X = row[col_mean_ind]  # [f"r{length}{column}"]
-                d[row[0]] = X
-            elif count > length:
-                X = prevX - (prevX / length) + row[col_ind]  # [column]
-                d[row[0]] = X
-            prevX = X
-            count += 1
-
-        return d
-
-    def _ADX_DM_logic(self, row, colA, colB):
-        # not optimised
-        if row[colA] > row[colB] and row[colA] > 0:
-            return row[colA]
-        else:
-            return 0
-
-    @classmethod
-    def average_directional_movement(cls, *args, **kwargs):
-        n = cls(*args, **kwargs)
-        HpH = (n.high - n.high.shift(1)).rename("HpH")
-        pLL = (n.low.shift(1) - n.low).rename("pLL")
-
-        DM = pd.concat([HpH, pLL, n.atr["TR"]], axis=1)
-        DM["+DM"] = DM.apply(n._ADX_DM_logic, axis=1, args=("HpH", "pLL"))
-        DM["-DM"] = DM.apply(n._ADX_DM_logic, axis=1, args=("pLL", "HpH"))
-
-        # StockCharts (school.stockcharts.com/doku.php?id=technical_indicators:
-        # average_directional_index_adx)
-        uDMdic = n._wilder_average_b(DM, "+DM", n.period)
-        uDM = pd.DataFrame.from_dict(
-            uDMdic, orient="index").rename(columns={0: "+DM14"})
-
-        dDMdic = n._wilder_average_b(DM, "-DM", n.period)
-        dDM = pd.DataFrame.from_dict(
-            dDMdic, orient="index").rename(columns={0: "-DM14"})
-
-        TRdic = n._wilder_average_b(n.atr, "TR", n.period)
-        TR14 = pd.DataFrame.from_dict(
-            TRdic, orient="index").rename(columns={0: "TR14"})
-
-        DI = pd.concat([uDM, dDM, TR14], axis=1)
-        DI["+DI"] = DI["+DM14"] / DI["TR14"] * 100
-        DI["-DI"] = DI["-DM14"] / DI["TR14"] * 100
-        DI["DX"] = (DI["+DI"] - DI["-DI"]).abs() /\
-            (DI["+DI"] + DI["-DI"]).abs() *\
-            100
-
-        adx_copy = DI.copy(deep=True)
-        adx_dict = n._wilder_average_a(adx_copy, "DX", n.period)
-        adx_frame = pd.DataFrame.from_dict(
-            adx_dict, orient="index").rename(columns={0: "ADX"})
-        ADX = DI.merge(
-            adx_frame, how="left", left_index=True, right_index=True,
-            validate="1:1")
-
-        return ADX[["+DI", "-DI", "DX", "ADX"]].round(4)
 
 
 if __name__ == "__main__":

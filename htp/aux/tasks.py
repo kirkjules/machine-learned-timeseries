@@ -13,7 +13,7 @@ from htp.api.oanda import Candles
 from htp.aux.database import db_session
 from htp.analyse import indicator, evaluate, observe
 from htp.aux.models import getTickerTask, subTickerTask, indicatorTask,\
-        genSignalTask
+        genSignalTask, candles
 
 
 class SessionTask(Task, Api):
@@ -119,27 +119,35 @@ def merge_data(results, ticker, price, granularity, task_id=None):
             for s in total.columns:
                 total[s] = pd.to_numeric(
                     total[s], errors='coerce', downcast='float')
+            total.reset_index(inplace=True)
+            total.rename(columns={'index': 'timestamp'}, inplace=True)
+            total['batch_id'] = task_id[f"{k}"]
 
-            path = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}"
-            if not os.path.isdir(path):
-                os.mkdir(path)
+            rows = total.to_dict('records')
+            # print(rows[:10])
+            db_session.bulk_insert_mappings(candles, rows)
 
-            if not os.path.isdir(path + f"/{k.split('/')[0]}"):
-                os.mkdir(path + f"/{k.split('/')[0]}")
+            # path = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}"
+            # if not os.path.isdir(path):
+            #     os.mkdir(path)
 
-            filename = path + f"/{k.split('/')[0]}/price.h5"
+            # if not os.path.isdir(path + f"/{k.split('/')[0]}"):
+            #     os.mkdir(path + f"/{k.split('/')[0]}")
 
-            with pd.HDFStore(filename) as store:
+            # filename = path + f"/{k.split('/')[0]}/price.h5"
+
+            # with pd.HDFStore(filename) as store:
                 # to maximise storage:
                 # $ ptrepack --chunkshape=auto --propindexes --complevel=9
                 # data/NZD_JPY.h5 data/out.h5
                 # to prevent duplicates
-                if f"/{k.split('/')[1]}" in store.keys():
+            #     if f"/{k.split('/')[1]}" in store.keys():
                     # print("Removing data")
-                    store.remove(f"{k.split('/')[1]}")
-                store.put(f"{k.split('/')[1]}", total)
+            #         store.remove(f"{k.split('/')[1]}")
+            #     store.put(f"{k.split('/')[1]}", total)
 
             del total
+            del rows
             record(getTickerTask, ('status',), task_id=task_id[f"{k}"])
 
 
@@ -160,8 +168,9 @@ def set_smooth_moving_average(df, path, task_id=None):
         avgs.append(avg)
 
     r = pd.concat(avgs, axis=1)
-    filename = path + "smooth_moving_average.h5"
-    r.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
+
+    # filename = path + "smooth_moving_average.h5"
+    # r.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
     record(indicatorTask, ('sma_status',), task_id=task_id)
 
 
@@ -185,7 +194,7 @@ def set_moving_average_convergence_divergence(df, path, task_id=None):
 @celery.task()
 def set_stochastic(df, path, task_id=None):
     stoch = indicator.stochastic(df)
-    stoch.drop(['close', 'minN', 'maxN'], axis=1, inplace=True)
+    # stoch.drop(['close', 'minN', 'maxN'], axis=1, inplace=True)
     filename = path + "stochastic.h5"
     stoch.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
     record(indicatorTask, ('stochastic_status',), task_id=task_id)
@@ -203,9 +212,9 @@ def set_relative_strength_index(df, path, task_id=None):
 @celery.task()
 def set_momentum(df, path, task_id=None):
     atr = indicator.Momentum.average_true_range(df)
-    atr.drop(['HL', 'HpC', 'LpC', 'TR', 'r14TR'], axis=1, inplace=True)
+    # atr.drop(['HL', 'HpC', 'LpC', 'TR', 'r14TR'], axis=1, inplace=True)
     adx = indicator.Momentum.average_directional_movement(df)
-    adx.drop(['+DI', '-DI', 'DX'], axis=1, inplace=True)
+    # adx.drop(['+DI', '-DI', 'DX'], axis=1, inplace=True)
     r = atr.merge(adx, how="left", left_index=True, right_index=True,
                   validate="1:1")
     filename = path + "momentum.h5"
@@ -286,9 +295,9 @@ def gen_signals(data, fast, slow, trade, ticker, granularity, atr_multiplier,
 
     ATR = data['prop']['ATR_target'].copy().to_frame(name="ATR")
     data_sys = data['sys'][[fast, slow]].copy().dropna()
-    sys_signals = evaluate.Signals.atr_stop_signals(
+    sys_signals = evaluate_fast.Signals.atr_stop_signals(
         ATR, data['M'], price[trade]['entry'], price[trade]['exit'], data_sys,
-        fast, slow, atr_multiplier=atr_multiplier, trade=trade, rounder=exp)
+        fast, slow, multiplier=atr_multiplier, trade=trade, exp=exp)
 
     close_to_close = observe.close_in_atr(data['M'], ATR)
     close_to_fast_signal = observe.close_to_signal_by_atr(

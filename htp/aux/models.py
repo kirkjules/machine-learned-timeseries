@@ -3,7 +3,7 @@ from htp.aux.database import Base
 from flask_login import UserMixin
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
@@ -45,6 +45,18 @@ class getTickerTask(Base):
     get_subtasks = relationship("subTickerTask", backref="getTickerTask")
     indicator_tasks = relationship(
         "indicatorTask", backref=backref("getTickerTask", uselist=False))
+
+
+class candles(Base):
+    __tablename__ = 'candles'
+    id = Column(Integer, primary_key=True, unique=True)
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("getTickerTask.id"),
+                primary_key=True, unique=False)
+    timestamp = Column(DateTime())
+    open = Column(Float)
+    high = Column(Float)
+    low = Column(Float)
+    close = Column(Float)
 
 
 class subTickerTask(Base):
