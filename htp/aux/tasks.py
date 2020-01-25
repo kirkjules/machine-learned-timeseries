@@ -10,10 +10,11 @@ from celery import Task
 from celery.result import AsyncResult
 # from datetime import datetime
 from htp.api.oanda import Candles
-from htp.aux.database import db_session
-from htp.analyse import indicator, evaluate, observe
+from sqlalchemy import select, MetaData, Table
+from htp.aux.database import db_session, engine
+from htp.analyse import indicator, evaluate, evaluate_fast, observe
 from htp.aux.models import getTickerTask, subTickerTask, indicatorTask,\
-        genSignalTask, candles
+        genSignalTask, candles, smoothmovingaverage, ichimokukinkohyo
 
 
 class SessionTask(Task, Api):
@@ -98,87 +99,75 @@ def record(table, columns, task_id=None):
 
 @celery.task(ignore_result=True)
 def merge_data(results, ticker, price, granularity, task_id=None):
-
+    """Sort ticker data in chunks to designated lists matching the same ticker,
+    price and granularity to be respectively concetenated and bulk inserted
+    into the database."""
     d = {}
     for val in price:
         for interval in granularity:
-            # print(f"{interval}/{val}")
             d[f"{interval}/{val}"] = []
 
     for result in results:
         if not isinstance(result[0], str):
-            # params["granularity"]/params["price"]
             d[f"{result[2]}/{result[1]}"].append(deepcopy(result[0]))
         AsyncResult(result[3]).forget()
 
     for k in d.keys():
         if len(d[k]) > 0:
-            total = pd.concat(d[k])
-            total = total.loc[~total.index.duplicated(keep='first')]
-            total.sort_index(inplace=True)
-            for s in total.columns:
-                total[s] = pd.to_numeric(
-                    total[s], errors='coerce', downcast='float')
-            total.reset_index(inplace=True)
-            total.rename(columns={'index': 'timestamp'}, inplace=True)
-            total['batch_id'] = task_id[f"{k}"]
+            df = pd.concat(d[k])
+            df = df.loc[~df.index.duplicated(keep='first')]
+            df.sort_index(inplace=True)
+            df.reset_index(inplace=True)
+            df.rename(columns={'index': 'timestamp'}, inplace=True)
+            df['batch_id'] = task_id[f"{k}"]
 
-            rows = total.to_dict('records')
-            # print(rows[:10])
+            rows = df.to_dict('records')
             db_session.bulk_insert_mappings(candles, rows)
 
-            # path = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}"
-            # if not os.path.isdir(path):
-            #     os.mkdir(path)
-
-            # if not os.path.isdir(path + f"/{k.split('/')[0]}"):
-            #     os.mkdir(path + f"/{k.split('/')[0]}")
-
-            # filename = path + f"/{k.split('/')[0]}/price.h5"
-
-            # with pd.HDFStore(filename) as store:
-                # to maximise storage:
-                # $ ptrepack --chunkshape=auto --propindexes --complevel=9
-                # data/NZD_JPY.h5 data/out.h5
-                # to prevent duplicates
-            #     if f"/{k.split('/')[1]}" in store.keys():
-                    # print("Removing data")
-            #         store.remove(f"{k.split('/')[1]}")
-            #     store.put(f"{k.split('/')[1]}", total)
-
-            del total
+            del df
             del rows
             record(getTickerTask, ('status',), task_id=task_id[f"{k}"])
 
 
-@celery.task()
-def load_data(filename, key):
-    with pd.HDFStore(filename) as store:
-        return store[key]
+def load_data(task_id):
+    _id = str(task_id)
+    metadata = MetaData(bind=None)
+    table = Table('candles', metadata, autoload=True, autoload_with=engine)
+    stmt = select([table.c.timestamp, table.c.open, table.c.high, table.c.low,
+                  table.c.close]).where(table.columns.batch_id == _id)
+    rows = pd.read_sql(
+        stmt, engine, index_col='timestamp', parse_dates=['timestamp'],
+        columns=['timestamp', 'open', 'high', 'low', 'close'])
+    return rows
 
 
-@celery.task()
-def set_smooth_moving_average(df, path, task_id=None):
+@celery.task(ignore_result=True)
+def set_smooth_moving_average(task_id):
+    rows = load_data(task_id)
     periods = [3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 20, 24, 25, 28, 30, 32,
                35, 36, 40, 48, 50, 60, 64, 70, 72, 80, 90, 96, 100]
     avgs = []
     for i in periods:
-        avg = indicator.smooth_moving_average(df, column="close",
+        avg = indicator.smooth_moving_average(rows, column="close",
                                               period=i)
         avgs.append(avg)
 
     r = pd.concat(avgs, axis=1)
-
-    # filename = path + "smooth_moving_average.h5"
-    # r.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
+    r.reset_index(inplace=True)
+    r['batch_id'] = task_id
+    rows = r.to_dict('records')
+    db_session.bulk_insert_mappings(smoothmovingaverage, rows)
     record(indicatorTask, ('sma_status',), task_id=task_id)
 
 
-@celery.task()
-def set_ichimoku_kinko_hyo(df, path, task_id=None):
-    r = indicator.ichimoku_kinko_hyo(df)
-    filename = path + "ichimoku_kinko_hyo.h5"
-    r.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
+@celery.task(ignore_result=True)
+def set_ichimoku_kinko_hyo(task_id):
+    rows = load_data(task_id)
+    r = indicator.ichimoku_kinko_hyo(rows)
+    r.reset_index(inplace=True)
+    r['batch_id'] = task_id
+    rows = r.to_dict('records')
+    db_session.bulk_insert_mappings(ichimokukinkohyo, rows)
     record(indicatorTask, ('ichimoku_status',), task_id=task_id)
 
 
@@ -286,7 +275,7 @@ def gen_signals(data, fast, slow, trade, ticker, granularity, atr_multiplier,
                 task_id=None):
 
     price = {'buy': {'entry': data['A'], 'exit': data['B']},
-             'sell': {'entry': data['B'], 'entry': data['A']}}
+             'sell': {'entry': data['B'], 'exit': data['A']}}
 
     if 'JPY' in ticker:
         exp = 3
@@ -329,7 +318,7 @@ def gen_signals(data, fast, slow, trade, ticker, granularity, atr_multiplier,
             downcast='float').astype(float)
 
     signals_with_properties = signals_with_properties.round(
-        {"entry_price": rounder, "exit_price": rounder, "stop_loss": rounder})
+        {"entry_price": exp, "exit_price": exp, "stop_loss": exp})
 
     path = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}/\
 {granularity}/signals"

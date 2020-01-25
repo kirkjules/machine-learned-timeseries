@@ -49,14 +49,66 @@ class getTickerTask(Base):
 
 class candles(Base):
     __tablename__ = 'candles'
-    id = Column(Integer, primary_key=True, unique=True)
+    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
     batch_id = Column(UUID(as_uuid=True), ForeignKey("getTickerTask.id"),
-                primary_key=True, unique=False)
+                      primary_key=True, unique=False)
     timestamp = Column(DateTime())
-    open = Column(Float)
-    high = Column(Float)
-    low = Column(Float)
-    close = Column(Float)
+    open = Column(Float(precision=6))
+    high = Column(Float(precision=6))
+    low = Column(Float(precision=6))
+    close = Column(Float(precision=6))
+
+
+class ichimokukinkohyo(Base):
+    __tablename__ = 'ichimokukinkohyo'
+    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("getTickerTask.id"),
+                      primary_key=True, unique=False)
+    timestamp = Column(DateTime())
+    tenkan = Column(Float(precision=6))
+    kijun = Column(Float(precision=6))
+    chikou = Column(Float(precision=6))
+    senkou_A = Column(Float(precision=6))
+    senkou_B = Column(Float(precision=6))
+
+
+class smoothmovingaverage(Base):
+    __tablename__ = 'smoothmovingaverage'
+    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("getTickerTask.id"),
+                      primary_key=True, unique=False)
+    timestamp = Column(DateTime())
+    close_sma_3 = Column(Float(precision=6))
+    close_sma_4 = Column(Float(precision=6))
+    close_sma_5 = Column(Float(precision=6))
+    close_sma_6 = Column(Float(precision=6))
+    close_sma_7 = Column(Float(precision=6))
+    close_sma_8 = Column(Float(precision=6))
+    close_sma_9 = Column(Float(precision=6))
+    close_sma_10 = Column(Float(precision=6))
+    close_sma_12 = Column(Float(precision=6))
+    close_sma_14 = Column(Float(precision=6))
+    close_sma_15 = Column(Float(precision=6))
+    close_sma_16 = Column(Float(precision=6))
+    close_sma_20 = Column(Float(precision=6))
+    close_sma_24 = Column(Float(precision=6))
+    close_sma_25 = Column(Float(precision=6))
+    close_sma_28 = Column(Float(precision=6))
+    close_sma_30 = Column(Float(precision=6))
+    close_sma_32 = Column(Float(precision=6))
+    close_sma_35 = Column(Float(precision=6))
+    close_sma_36 = Column(Float(precision=6))
+    close_sma_40 = Column(Float(precision=6))
+    close_sma_48 = Column(Float(precision=6))
+    close_sma_50 = Column(Float(precision=6))
+    close_sma_60 = Column(Float(precision=6))
+    close_sma_64 = Column(Float(precision=6))
+    close_sma_70 = Column(Float(precision=6))
+    close_sma_72 = Column(Float(precision=6))
+    close_sma_80 = Column(Float(precision=6))
+    close_sma_90 = Column(Float(precision=6))
+    close_sma_96 = Column(Float(precision=6))
+    close_sma_100 = Column(Float(precision=6))
 
 
 class subTickerTask(Base):

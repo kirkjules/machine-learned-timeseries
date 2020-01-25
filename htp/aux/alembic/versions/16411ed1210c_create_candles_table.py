@@ -20,7 +20,7 @@ depends_on = None
 def upgrade():
     op.create_table(
         'candles',
-        sa.Column('id', sa.Integer, primary_key=True),
+        sa.Column('id', sa.Integer, primary_key=True, autoincrement=True),
         sa.Column(
             'batch_id', UUID(as_uuid=True), sa.ForeignKey("getTickerTask.id")),
         sa.Column('timestamp', sa.DateTime()),

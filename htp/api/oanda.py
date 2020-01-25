@@ -88,11 +88,10 @@ class Candles(Api):
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.headers = {"Content-Type": "application/json",
-                        "Authorization": "Bearer {0}"
-                        .format(self.details["token"])}
+                        "Authorization": f"Bearer {self.details['token']}"}
         self.instrument = kwargs["instrument"]
-        self.url = f'https://api-fxpractice.oanda.com/v3/instruments/'
-        '{self.instrument}/candles?'
+        self.url = f'https://api-fxpractice.oanda.com/v3/instruments/\
+{self.instrument}/candles?'
         self.queryParameters = kwargs["queryParameters"]
 
         try:
@@ -147,8 +146,7 @@ class Candles(Api):
 
 if __name__ == "__main__":
     """
-    python htp/api/oanda.py "AUD_JPY" "2018-06-25T16:00:00.000000000Z" 50\
-            "M15" out.csv
+    python htp/api/oanda.py "AUD_JPY" "2018-06-25T16:00:00.000000000Z" 50 "M15"
     """
     logger.enable("__main__")
     logger.add(

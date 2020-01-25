@@ -5,7 +5,7 @@ from uuid import uuid4, UUID
 from htp.toolbox import dates
 from htp.aux import tasks
 from htp.aux.database import db_session
-from htp.aux.models import getTickerTask, subTickerTask
+from htp.aux.models import getTickerTask, subTickerTask, candles
 
 
 # imported celery app for chord to recognise backend.
@@ -61,9 +61,10 @@ def get_data(ticker, price, granularity, from_, to, smooth, db=True):
 
     Notes
     -----
-    - If the data download is successfull the timeseries will be saved as a
-    pytable in a HDF file, under an automatically generated directory structure
-    that sits below the data folder in the root directory.
+    - If the data download is successfull the timeseries will be saved as in
+    the 'candles' table in the database, with a foreign key on each row
+    relating the given entry the initial get ticker query to defines the ticker
+    type, price, granularity, and batch from and to date.
     - The database logging functionality is designed to recylce pre-existing
     rows that match the same ticker, price and granularity criteris, updating
     the from_ and to values accordingly.
@@ -92,6 +93,9 @@ def get_data(ticker, price, granularity, from_, to, smooth, db=True):
                     setattr(entry, "to", to)
                     db_session.query(subTickerTask).filter(
                         subTickerTask.get_id == entry.id).delete(
+                            synchronize_session=False)
+                    db_session.query(candles).filter(
+                        candles.batch_id == entry.id).delete(
                             synchronize_session=False)
 
             param_set = arg_prep(args)

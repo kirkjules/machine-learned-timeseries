@@ -1,21 +1,17 @@
 """A command line script to generate indicator values from select ticker data.
 """
-import os
+# import os
 import click
-from celery import group
+# from celery import group
 from htp.aux import tasks
 from htp.aux.database import db_session
-from htp.aux.models import getTickerTask, indicatorTask
+from htp.aux.models import getTickerTask, indicatorTask, smoothmovingaverage,\
+        ichimokukinkohyo
 
 
 def get_data(ticker, granularity, db=True):
     """Function that enqueues indicator calculations in celery to be actioned
     by a rabbitmq backend."""
-
-    path = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}/\
-{granularity}/"
-    name = "price.h5"
-    key = "/M"
 
     task_id = None
     if db:
@@ -35,31 +31,28 @@ intervals."
                       'rsi_status', 'macd_status', 'ichimoku_status',
                       'sma_status', 'status']:
                 setattr(indicator, i, 0)
+            db_session.query(
+                smoothmovingaverage).filter(
+                    smoothmovingaverage.batch_id == entry.id
+                ).delete(synchronize_session=False)
+            db_session.query(
+                ichimokukinkohyo).filter(
+                    ichimokukinkohyo.batch_id == entry.id
+                ).delete(synchronize_session=False)
         db_session.commit()
 
-    # get = tasks.load_data.s(path + name, key)
+    tasks.set_smooth_moving_average.delay(task_id)
+    tasks.set_ichimoku_kinko_hyo.delay(task_id)
 
-    # Bulk indicator generation defines use case, indicators are used to teach
-    # machine learning which system signals have the highest probability of
-    # success. Intentionally removing data input is unecessary at this step in
-    # the test flow.
-    # path_to_ind = path + "indicators/"
-    # if not os.path.isdir(path_to_ind):
-    #     os.mkdir(path_to_ind)
+    return None
 
     # header = group(
-    #     tasks.set_smooth_moving_average.s(path_to_ind, task_id=task_id),
-    #     tasks.set_ichimoku_kinko_hyo.s(path_to_ind, task_id=task_id),
     #     tasks.set_moving_average_convergence_divergence.s(
     #         path_to_ind, task_id=task_id),
     #     tasks.set_stochastic.s(path_to_ind, task_id=task_id),
     #     tasks.set_relative_strength_index.s(path_to_ind, task_id=task_id),
     #     tasks.set_momentum.s(path_to_ind, task_id=task_id)
     # )
-
-    # callback = tasks.assemble.si(path, task_id=task_id)
-
-    # return (get | header | callback).delay()
 
 
 @click.command()
