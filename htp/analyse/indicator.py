@@ -221,18 +221,18 @@ def relative_strength_index(data, period=14):
             avg_gain = row[5]  # ["AvgGain"]
             avg_loss = row[6]  # ["AvgLoss"]
             r[row[0]] = {"avg_gain": avg_gain, "avg_loss": avg_loss,
-                         "RS": (avg_gain / avg_loss)}
+                         "rs": (avg_gain / avg_loss)}
         elif count > 14:
             avg_gain = ((gain * 13) + row[3]) / 14  # Adv
             avg_loss = ((loss * 13) + row[4]) / 14  # Decl
             r[row[0]] = {"avg_gain": avg_gain, "avg_loss": avg_loss,
-                         "RS": (avg_gain / avg_loss)}
+                         "rs": (avg_gain / avg_loss)}
         gain = avg_gain
         loss = avg_loss
         count += 1
 
     rs = pd.DataFrame.from_dict(r, orient="index")
-    rs["RSI"] = rs.apply(lambda x: 100 - (100 / (1 + x["RS"])), axis=1)
+    rs["rsi"] = rs.apply(lambda x: 100 - (100 / (1 + x["rs"])), axis=1)
 
     return rs.round(6)
 
@@ -310,9 +310,9 @@ def stochastic(data, period=14, smoothK=1, smoothD=3):
                   where=denominator != 0)
     percK = k * 100
     s = pd.DataFrame(data=percK, index=data.index, columns=['K'])
-    s["%K"] = s["K"].rolling(smoothK).mean()
+    s["percK"] = s["K"].rolling(smoothK).mean()
     s.drop('K', axis=1, inplace=True)
-    s["%D"] = s["%K"].rolling(smoothD).mean()
+    s["percD"] = s["percK"].rolling(smoothD).mean()
     return s.round(6)
 
 
@@ -393,10 +393,10 @@ def moving_average_convergence_divergence(data, fast=12, slow=26, signal=9):
     emaS = data["close"].ewm(
         span=slow, min_periods=slow).mean().rename("emaS")
     e = pd.concat([emaF, emaS], axis=1)
-    e["MACD"] = e["emaF"] - e["emaS"]
-    e["Signal"] = e["MACD"].ewm(
+    e["macd"] = e["emaF"] - e["emaS"]
+    e["signal"] = e["macd"].ewm(
         span=signal, min_periods=signal).mean()
-    e["Histogram"] = e["MACD"] - e["Signal"]
+    e["histogram"] = e["macd"] - e["signal"]
 
     return e.round(6)
 
@@ -528,7 +528,7 @@ class Momentum:
         base = cls(*args, **kwargs)
         atr = base._w_avg_a(base.TR)
         return pd.DataFrame(
-            data=atr, index=base.index, columns=['ATR']).round(6)
+            data=atr, index=base.index, columns=['atr']).round(6)
 
     @classmethod
     def average_directional_movement(cls, *args, **kwargs):
@@ -549,7 +549,7 @@ class Momentum:
         DX = np.absolute(DIp - DIm) / np.absolute(DIp + DIm) * 100
         adx = base._w_avg_a(DX, ind=28)
         return pd.DataFrame(
-            data=adx, index=base.index, columns=['ADX']).round(6)
+            data=adx, index=base.index, columns=['adx']).round(6)
 
     def _w_avg_b(self, a):
         with np.nditer([a, None]) as it:

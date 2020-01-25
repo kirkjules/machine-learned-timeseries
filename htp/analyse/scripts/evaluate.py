@@ -38,24 +38,14 @@ def get_data(ticker, granularity, system, db=True):
 intervals."
         batch_id = entry.id
         ids = {}
-        for k in system:
-            ids[k] = {}
+        for s in system:
+            ids[f"{s[0]} s[1]}"] = {}
             for trade in ['buy', 'sell']:
                 ids[k][trade] = uuid4()
-                db_session.add(
-                    genSignalTask(
-                        id=ids[k][trade],
-                        batch_id=batch_id,
-                        sma_close_x=k.split(' ')[0],
-                        sma_close_y=k.split(' ')[1],
-                        trade_direction=trade,
-                        exit_strategy="trailing_atr_6"))
+                db_session.add(genSignalTask(
+                    id=ids[k][trade], batch_id=batch_id, fast=k[0], slow=k[1],
+                    direction=trade, strategy="trailing_atr_6"))
         db_session.commit()
-
-    files = []
-    base = f'/Users/juleskirk/Documents/projects/htp/data/{ticker}/'
-    g = f'{granularity.split(" ")[0]}/'
-    # granularity = 'M15 H1' OR 'H1 H4' OR 'H4 None'
 
     for P in ['M', 'B', 'A']:
         df = base + g + 'price.h5'

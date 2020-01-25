@@ -72,6 +72,51 @@ class ichimokukinkohyo(Base):
     senkou_B = Column(Float(precision=6))
 
 
+class stochastic(Base):
+    __tablename__ = 'stochastic'
+    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("getTickerTask.id"),
+                      primary_key=True, unique=False)
+    timestamp = Column(DateTime())
+    percK = Column(Float(precision=6))
+    percD = Column(Float(precision=6))
+
+
+class relativestrengthindex(Base):
+    __tablename__ = 'relativestrengthindex'
+    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("getTickerTask.id"),
+                      primary_key=True, unique=False)
+    timestamp = Column(DateTime())
+    avg_gain = Column(Float(precision=6))
+    avg_loss = Column(Float(precision=6))
+    rs = Column(Float(precision=6))
+    rsi = Column(Float(precision=6))
+
+
+class momentum(Base):
+    __tablename__ = 'momentum'
+    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("getTickerTask.id"),
+                      primary_key=True, unique=False)
+    timestamp = Column(DateTime())
+    atr = Column(Float(precision=6))
+    adx = Column(Float(precision=6))
+
+
+class movavgconvdiv(Base):
+    __tablename__ = 'movavgconvdiv'
+    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("getTickerTask.id"),
+                      primary_key=True, unique=False)
+    timestamp = Column(DateTime())
+    emaF = Column(Float(precision=6))
+    emaS = Column(Float(precision=6))
+    macd = Column(Float(precision=6))
+    signal = Column(Float(precision=6))
+    histogram = Column(Float(precision=6))
+
+
 class smoothmovingaverage(Base):
     __tablename__ = 'smoothmovingaverage'
     id = Column(Integer, primary_key=True, unique=True, autoincrement=True)

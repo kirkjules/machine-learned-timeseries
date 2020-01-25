@@ -6,7 +6,8 @@ import click
 from htp.aux import tasks
 from htp.aux.database import db_session
 from htp.aux.models import getTickerTask, indicatorTask, smoothmovingaverage,\
-        ichimokukinkohyo
+        ichimokukinkohyo, movavgconvdiv, momentum, relativestrengthindex,\
+        stochastic
 
 
 def get_data(ticker, granularity, db=True):
@@ -31,28 +32,22 @@ intervals."
                       'rsi_status', 'macd_status', 'ichimoku_status',
                       'sma_status', 'status']:
                 setattr(indicator, i, 0)
-            db_session.query(
-                smoothmovingaverage).filter(
-                    smoothmovingaverage.batch_id == entry.id
-                ).delete(synchronize_session=False)
-            db_session.query(
-                ichimokukinkohyo).filter(
-                    ichimokukinkohyo.batch_id == entry.id
-                ).delete(synchronize_session=False)
+            for table in [
+              smoothmovingaverage, ichimokukinkohyo, movavgconvdiv,
+              momentum, relativestrengthindex, stochastic]:
+                db_session.query(
+                    table).filter(table.batch_id == entry.id).delete(
+                        synchronize_session=False)
         db_session.commit()
 
     tasks.set_smooth_moving_average.delay(task_id)
     tasks.set_ichimoku_kinko_hyo.delay(task_id)
+    tasks.set_moving_average_convergence_divergence.delay(task_id)
+    tasks.set_momentum.delay(task_id)
+    tasks.set_stochastic.delay(task_id)
+    tasks.set_relative_strength_index.delay(task_id)
 
     return None
-
-    # header = group(
-    #     tasks.set_moving_average_convergence_divergence.s(
-    #         path_to_ind, task_id=task_id),
-    #     tasks.set_stochastic.s(path_to_ind, task_id=task_id),
-    #     tasks.set_relative_strength_index.s(path_to_ind, task_id=task_id),
-    #     tasks.set_momentum.s(path_to_ind, task_id=task_id)
-    # )
 
 
 @click.command()

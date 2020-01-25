@@ -14,7 +14,8 @@ from sqlalchemy import select, MetaData, Table
 from htp.aux.database import db_session, engine
 from htp.analyse import indicator, evaluate, evaluate_fast, observe
 from htp.aux.models import getTickerTask, subTickerTask, indicatorTask,\
-        genSignalTask, candles, smoothmovingaverage, ichimokukinkohyo
+        genSignalTask, candles, smoothmovingaverage, ichimokukinkohyo,\
+        movavgconvdiv, momentum, stochastic, relativestrengthindex
 
 
 class SessionTask(Task, Api):
@@ -84,19 +85,6 @@ def session_get_data(
         return (res, params["price"], params["granularity"], self.request.id)
 
 
-def record(table, columns, task_id=None):
-    """Helper function to record tasks' internal functions' success in the
-    database."""
-    if task_id is not None:
-        entry = db_session.query(table).get(task_id)
-        for column in columns:
-            setattr(entry, column, 1)
-        db_session.commit()
-        db_session.remove()
-    else:
-        pass
-
-
 @celery.task(ignore_result=True)
 def merge_data(results, ticker, price, granularity, task_id=None):
     """Sort ticker data in chunks to designated lists matching the same ticker,
@@ -119,112 +107,103 @@ def merge_data(results, ticker, price, granularity, task_id=None):
             df.sort_index(inplace=True)
             df.reset_index(inplace=True)
             df.rename(columns={'index': 'timestamp'}, inplace=True)
-            df['batch_id'] = task_id[f"{k}"]
-
-            rows = df.to_dict('records')
-            db_session.bulk_insert_mappings(candles, rows)
-
-            del df
-            del rows
-            record(getTickerTask, ('status',), task_id=task_id[f"{k}"])
+            save_data(df, candles, getTickerTask, ('status',), task_id[f'{k}'])
 
 
-def load_data(task_id):
+def load_data(task_id, model, columns):
     _id = str(task_id)
     metadata = MetaData(bind=None)
-    table = Table('candles', metadata, autoload=True, autoload_with=engine)
-    stmt = select([table.c.timestamp, table.c.open, table.c.high, table.c.low,
-                  table.c.close]).where(table.columns.batch_id == _id)
-    rows = pd.read_sql(
+    table = Table(model, metadata, autoload=True, autoload_with=engine)
+    stmt = select([getattr(table.c, col) for col in columns]).where(
+        table.columns.batch_id == _id)
+    df = pd.read_sql(
         stmt, engine, index_col='timestamp', parse_dates=['timestamp'],
-        columns=['timestamp', 'open', 'high', 'low', 'close'])
-    return rows
+        columns=columns)
+    return df
+
+
+def save_data(df, data_table, record_table, record_columns, task_id):
+    """Helper function to record tasks' internal functions' success in the
+    database."""
+    df['batch_id'] = task_id
+    rows = df.to_dict('records')
+    db_session.bulk_insert_mappings(data_table, rows)
+    del rows
+
+    entry = db_session.query(record_table).get(task_id)
+    for col in record_columns:
+        setattr(entry, col, 1)
+    db_session.commit()
+    db_session.remove()
 
 
 @celery.task(ignore_result=True)
 def set_smooth_moving_average(task_id):
-    rows = load_data(task_id)
+    df = load_data(
+        task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
     periods = [3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 20, 24, 25, 28, 30, 32,
                35, 36, 40, 48, 50, 60, 64, 70, 72, 80, 90, 96, 100]
     avgs = []
     for i in periods:
-        avg = indicator.smooth_moving_average(rows, column="close",
+        avg = indicator.smooth_moving_average(df, column="close",
                                               period=i)
         avgs.append(avg)
 
     r = pd.concat(avgs, axis=1)
     r.reset_index(inplace=True)
-    r['batch_id'] = task_id
-    rows = r.to_dict('records')
-    db_session.bulk_insert_mappings(smoothmovingaverage, rows)
-    record(indicatorTask, ('sma_status',), task_id=task_id)
+    save_data(r, smoothmovingaverage, indicatorTask, ('sma_status',), task_id)
 
 
 @celery.task(ignore_result=True)
 def set_ichimoku_kinko_hyo(task_id):
-    rows = load_data(task_id)
-    r = indicator.ichimoku_kinko_hyo(rows)
+    df = load_data(
+        task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
+    r = indicator.ichimoku_kinko_hyo(df)
     r.reset_index(inplace=True)
-    r['batch_id'] = task_id
-    rows = r.to_dict('records')
-    db_session.bulk_insert_mappings(ichimokukinkohyo, rows)
-    record(indicatorTask, ('ichimoku_status',), task_id=task_id)
-
-
-@celery.task()
-def set_moving_average_convergence_divergence(df, path, task_id=None):
-    macd = indicator.moving_average_convergence_divergence(df)
-    macd.drop(['emaF', 'emaS'], axis=1, inplace=True)
-    filename = path + "moving_average_convergence_divergence.h5"
-    macd.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
-    record(indicatorTask, ('macd_status',), task_id=task_id)
-
-
-@celery.task()
-def set_stochastic(df, path, task_id=None):
-    stoch = indicator.stochastic(df)
-    # stoch.drop(['close', 'minN', 'maxN'], axis=1, inplace=True)
-    filename = path + "stochastic.h5"
-    stoch.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
-    record(indicatorTask, ('stochastic_status',), task_id=task_id)
-
-
-@celery.task()
-def set_relative_strength_index(df, path, task_id=None):
-    rsi = indicator.relative_strength_index(df)
-    rsi.drop(['avg_gain', 'avg_loss', 'RS'], axis=1, inplace=True)
-    filename = path + "relative_strength_index.h5"
-    rsi.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
-    record(indicatorTask, ('rsi_status',), task_id=task_id)
-
-
-@celery.task()
-def set_momentum(df, path, task_id=None):
-    atr = indicator.Momentum.average_true_range(df)
-    # atr.drop(['HL', 'HpC', 'LpC', 'TR', 'r14TR'], axis=1, inplace=True)
-    adx = indicator.Momentum.average_directional_movement(df)
-    # adx.drop(['+DI', '-DI', 'DX'], axis=1, inplace=True)
-    r = atr.merge(adx, how="left", left_index=True, right_index=True,
-                  validate="1:1")
-    filename = path + "momentum.h5"
-    r.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
-    record(indicatorTask, ('atr_status', 'adx_status'), task_id=task_id)
+    save_data(
+        r, ichimokukinkohyo, indicatorTask, ('ichimoku_status',), task_id)
 
 
 @celery.task(ignore_result=True)
-def assemble(path, task_id=None):
-    list_indicators = []
-    for i in ["momentum", "relative_strength_index", "stochastic",
-              "moving_average_convergence_divergence", "smooth_moving_average",
-              "ichimoku_kinko_hyo"]:
-        with pd.HDFStore(path + "indicators/" + i + ".h5") as store:
-            list_indicators.append(store["/I"])
-        os.remove(path + "indicators/" + i + ".h5")
-    os.rmdir(path + "indicators/")
-    indicators = pd.concat(list_indicators, axis=1)
-    filename = path + "indicators.h5"
-    indicators.to_hdf(filename, 'I',  mode='w', format='fixed', complevel=9)
-    record(indicatorTask, ('status',), task_id=task_id)
+def set_moving_average_convergence_divergence(task_id):
+    df = load_data(
+        task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
+    macd = indicator.moving_average_convergence_divergence(df)
+    macd.reset_index(inplace=True)
+    save_data(macd, movavgconvdiv, indicatorTask, ('macd_status',), task_id)
+
+
+@celery.task(ignore_result=True)
+def set_stochastic(task_id):
+    df = load_data(
+        task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
+    stoch = indicator.stochastic(df)
+    stoch.reset_index(inplace=True)
+    save_data(
+        stoch, stochastic, indicatorTask, ('stochastic_status',), task_id)
+
+
+@celery.task(ignore_result=True)
+def set_relative_strength_index(task_id):
+    df = load_data(
+        task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
+    rsi = indicator.relative_strength_index(df)
+    rsi.reset_index(inplace=True)
+    save_data(
+        rsi, relativestrengthindex, indicatorTask, ('rsi_status',), task_id)
+
+
+@celery.task(ignore_result=True)
+def set_momentum(task_id):
+    df = load_data(
+        task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
+    atr = indicator.Momentum.average_true_range(df)
+    adx = indicator.Momentum.average_directional_movement(df)
+    r = atr.merge(adx, how="left", left_index=True, right_index=True,
+                  validate="1:1")
+    r.reset_index(inplace=True)
+    save_data(
+        r, momentum, indicatorTask, ('atr_status', 'adx_status'), task_id)
 
 
 @celery.task
@@ -271,8 +250,7 @@ def load_signal_data(data):
 
 
 @celery.task(ignore_result=True)
-def gen_signals(data, fast, slow, trade, ticker, granularity, atr_multiplier,
-                task_id=None):
+def gen_signals(task_id, fast, slow, trade, atr_multiplier):
 
     price = {'buy': {'entry': data['A'], 'exit': data['B']},
              'sell': {'entry': data['B'], 'exit': data['A']}}
@@ -282,51 +260,54 @@ def gen_signals(data, fast, slow, trade, ticker, granularity, atr_multiplier,
     else:
         exp = 5
 
-    ATR = data['prop']['ATR_target'].copy().to_frame(name="ATR")
-    data_sys = data['sys'][[fast, slow]].copy().dropna()
+    atr = load_data(task_id, 'momentum', ['timestamp', 'atr']).dropna()
+    mid_close = load_data(task_id, 'candles', ['timestamp', 'close'])
+
     sys_signals = evaluate_fast.Signals.atr_stop_signals(
         ATR, data['M'], price[trade]['entry'], price[trade]['exit'], data_sys,
         fast, slow, multiplier=atr_multiplier, trade=trade, exp=exp)
 
-    close_to_close = observe.close_in_atr(data['M'], ATR)
-    close_to_fast_signal = observe.close_to_signal_by_atr(
-        data['M'], data_sys, fast, ATR)
-    close_to_slow_signal = observe.close_to_signal_by_atr(
-        data['M'], data_sys, slow, ATR)
+    save_data(sys_signals)
 
-    properties = pd.concat([data['prop'], close_to_close, close_to_fast_signal,
-                           close_to_slow_signal], axis=1)
-    properties = properties.shift(1)  # very important, match most recent known
+    # close_to_close = observe.close_in_atr(data['M'], ATR)
+    # close_to_fast_signal = observe.close_to_signal_by_atr(
+    #     data['M'], data_sys, fast, ATR)
+    # close_to_slow_signal = observe.close_to_signal_by_atr(
+    #     data['M'], data_sys, slow, ATR)
+
+    # properties = pd.concat([data['prop'], close_to_close, close_to_fast_signal,
+    #                        close_to_slow_signal], axis=1)
+    # properties = properties.shift(1)  # very important, match most recent known
     # property to proceeding timestamp where trade is entered.
-    for s in properties.columns:
-        if "ATR_" in s:
-            properties.drop([s], axis=1, inplace=True)
+    # for s in properties.columns:
+    #     if "ATR_" in s:
+    #         properties.drop([s], axis=1, inplace=True)
 
-    signals_with_properties = sys_signals.merge(
-        properties, how="inner", left_on="entry_datetime", right_index=True,
-        validate="1:1")
+    # signals_with_properties = sys_signals.merge(
+    #     properties, how="inner", left_on="entry_datetime", right_index=True,
+    #     validate="1:1")
 
-    signals_with_properties["close_in_atr"] = pd.to_numeric(
-        signals_with_properties["close_in_atr"], errors="coerce",
-        downcast='integer')
+    # signals_with_properties["close_in_atr"] = pd.to_numeric(
+    #     signals_with_properties["close_in_atr"], errors="coerce",
+    #     downcast='integer')
 
     # converts values from decimal objects into float32 and then float64 to
     # round.
-    for col in ["exit_price", "stop_loss"]:
-        signals_with_properties[col] = pd.to_numeric(
-            signals_with_properties[col], errors="coerce",
-            downcast='float').astype(float)
+    # for col in ["exit_price", "stop_loss"]:
+    #     signals_with_properties[col] = pd.to_numeric(
+    #         signals_with_properties[col], errors="coerce",
+    #         downcast='float').astype(float)
 
-    signals_with_properties = signals_with_properties.round(
-        {"entry_price": exp, "exit_price": exp, "stop_loss": exp})
+    # signals_with_properties = signals_with_properties.round(
+    #     {"entry_price": exp, "exit_price": exp, "stop_loss": exp})
 
-    path = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}/\
-{granularity}/signals"
-    if not os.path.isdir(path):
-        os.mkdir(path)
+    # path = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}/\
+    # {granularity}/signals"
+    # if not os.path.isdir(path):
+    #     os.mkdir(path)
 
-    signals_with_properties.to_hdf(
-        f"{path}/{trade}-{fast}-{slow}.h5", 'S',  mode='w', format='table',
-        complevel=9)
+    # signals_with_properties.to_hdf(
+    #     f"{path}/{trade}-{fast}-{slow}.h5", 'S',  mode='w', format='table',
+    #     complevel=9)
 
-    record(genSignalTask, ('status',), task_id=task_id)
+    # record(genSignalTask, ('status',), task_id=task_id)
