@@ -1,8 +1,8 @@
-import os
+# import os
 # import sys
 import requests
 import pandas as pd
-from uuid import UUID
+from uuid import UUID, uuid4
 from htp import celery
 from htp.api import Api
 from copy import deepcopy
@@ -12,10 +12,10 @@ from celery.result import AsyncResult
 from htp.api.oanda import Candles
 from sqlalchemy import select, MetaData, Table
 from htp.aux.database import db_session, engine
-from htp.analyse import indicator, evaluate, evaluate_fast, observe
+from htp.analyse import indicator, evaluate, evaluate_fast  # , observe
 from htp.aux.models import getTickerTask, subTickerTask, indicatorTask,\
         genSignalTask, candles, smoothmovingaverage, ichimokukinkohyo,\
-        movavgconvdiv, momentum, stochastic, relativestrengthindex
+        movavgconvdiv, momentum, stochastic, relativestrengthindex, signals
 
 
 class SessionTask(Task, Api):
@@ -250,24 +250,44 @@ def load_signal_data(data):
 
 
 @celery.task(ignore_result=True)
-def gen_signals(task_id, fast, slow, trade, atr_multiplier):
+def gen_signals(mid_id, ask_id, bid_id, fast, slow, trade, multiplier=6.0):
 
-    price = {'buy': {'entry': data['A'], 'exit': data['B']},
-             'sell': {'entry': data['B'], 'exit': data['A']}}
-
-    if 'JPY' in ticker:
-        exp = 3
-    else:
-        exp = 5
-
-    atr = load_data(task_id, 'momentum', ['timestamp', 'atr']).dropna()
-    mid_close = load_data(task_id, 'candles', ['timestamp', 'close'])
+    price = {'buy': {'entry': ask_id, 'exit': bid_id},
+             'sell': {'entry': bid_id, 'exit': ask_id}}
+    mid_close = load_data(mid_id, 'candles', ['timestamp', 'close'])
+    entry = load_data(price[trade]['entry'], 'candles', ['timestamp', 'open'])
+    entry.rename(columns={'open': 'entry_open'}, inplace=True)
+    exit_ = load_data(
+        price[trade]['exit'], 'candles', ['timestamp', 'open', 'high', 'low'])
+    exit_.rename(
+        columns={'open': 'exit_open', 'high': 'exit_high', 'low': 'exit_low'},
+        inplace=True)
+    atr = load_data(mid_id, 'momentum', ['timestamp', 'atr'])
+    dfsys = load_data(mid_id, 'smoothmovingaverage', ['timestamp', fast, slow])
+    df = pd.concat([mid_close, entry, exit_, atr, dfsys], axis=1)
+    df.dropna(inplace=True)
 
     sys_signals = evaluate_fast.Signals.atr_stop_signals(
-        ATR, data['M'], price[trade]['entry'], price[trade]['exit'], data_sys,
-        fast, slow, multiplier=atr_multiplier, trade=trade, exp=exp)
+        df, fast, slow, multiplier=multiplier, trade=trade)
 
-    save_data(sys_signals)
+    sys_signals['get_id'] = mid_id
+
+    sys_entry = db_session.query(genSignalTask).filter(
+        genSignalTask.batch_id == mid_id, genSignalTask.fast == fast,
+        genSignalTask.slow == slow, genSignalTask.trade_direction == trade,
+        genSignalTask.exit_strategy == 'trailing_atr_6').first()
+    if sys_entry is None:
+        sys_id = uuid4()
+        db_session.add(genSignalTask(
+            id=sys_id, batch_id=mid_id, fast=fast, slow=slow,
+            trade_direction=trade, exit_strategy="trailing_atr_6"))
+    else:
+        sys_id = sys_entry.id
+        setattr(signals, 'status', 0)
+        db_session.query(signals).filter(signals.batch_id == sys_id).delete(
+            synchronize_session=False)
+    db_session.commit()
+    save_data(sys_signals, signals, genSignalTask, ('status',), sys_id)
 
     # close_to_close = observe.close_in_atr(data['M'], ATR)
     # close_to_fast_signal = observe.close_to_signal_by_atr(
@@ -275,9 +295,11 @@ def gen_signals(task_id, fast, slow, trade, atr_multiplier):
     # close_to_slow_signal = observe.close_to_signal_by_atr(
     #     data['M'], data_sys, slow, ATR)
 
-    # properties = pd.concat([data['prop'], close_to_close, close_to_fast_signal,
+    # properties = pd.concat([data['prop'], close_to_close,
+    # close_to_fast_signal,
     #                        close_to_slow_signal], axis=1)
-    # properties = properties.shift(1)  # very important, match most recent known
+    # properties = properties.shift(1)  # very important, match most recent
+    # known
     # property to proceeding timestamp where trade is entered.
     # for s in properties.columns:
     #     if "ATR_" in s:

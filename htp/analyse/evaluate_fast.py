@@ -5,33 +5,33 @@ import pandas as pd
 
 class Signals:
 
-    def __init__(self, df_mid, df_entry, df_exit, df_sys, fast, slow,
-                 trade='buy', stop=0.5, exp=3):
+    def __init__(self, df, fast, slow, trade='buy', stop=0.5):
         """
         16.4 ms ± 317 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
         """
 
         self.trade = trade
-        self.close = df_mid.close.to_numpy()
-        self.entry = df_entry.open.to_numpy()
-        self.exit = df_exit.open.to_numpy()
-        self.index = df_mid.index
-        self.fast = df_sys[f"{fast}"].to_numpy()
-        self.slow = df_sys[f"{slow}"].to_numpy()
+        self.close = df.close.to_numpy()
+        self.entry = df.entry_open.to_numpy()
+        self.exit = df.exit_open.to_numpy()
+        self.index = df.index
+        self.fast = df[fast].to_numpy()
+        self.slow = df[slow].to_numpy()
         self.stop = abs(stop)
-        self.exit_high = df_exit.high.to_numpy()
-        self.exit_low = df_exit.low.to_numpy()
+        self.exit_high = df.exit_high.to_numpy()
+        self.exit_low = df.exit_low.to_numpy()
+        self.atr = np.roll(df.atr.to_numpy(), 1)
         if trade == "buy":
             self.stop = -abs(stop)
             self.raw_signals = self._signal(
                 self.fast, self.slow, self.entry, self.exit, self.index,
-                self.stop, exp)
+                self.stop)
         elif trade == 'sell':
             self.raw_signals = self._signal(
                 self.slow, self.fast, self.entry, self.exit, self.index,
-                self.stop, exp)
+                self.stop)
 
-    def _signal(self, a, b, p_en, p_ex, dt_index, stop, exp):
+    def _signal(self, a, b, p_en, p_ex, dt_index, stop):
         """
         Parameters
         ----------
@@ -76,23 +76,22 @@ class Signals:
         return s
 
     @classmethod
-    def atr_stop_signals(cls, df_prop, *args, multiplier=6.0, **kwargs):
+    def atr_stop_signals(cls, *args, multiplier=6.0, **kwargs):
         base = cls(*args, **kwargs)
         en = base.raw_signals.entry_type.to_numpy()
         prev_close_1 = np.roll(base.close, 1)
         prev_close_2 = np.roll(base.close, 2)
-        atr = np.roll(df_prop.ATR.to_numpy(), 1)
 
         # stop loss by atr
         stop_loss_by_atr = np.full_like(base.entry, np.nan, dtype=np.double)
         if base.trade == 'buy':
             stop_loss = np.where(
                 np.greater(prev_close_1, prev_close_2) | (en == True),
-                base.entry + (atr * -multiplier), np.nan)
+                base.entry + (base.atr * -multiplier), np.nan)
         elif base.trade == 'sell':
             stop_loss = np.where(
                 np.greater(prev_close_2, prev_close_1) | (en == True),
-                base.entry + (atr * multiplier), np.nan)
+                base.entry + (base.atr * multiplier), np.nan)
         stop_loss_by_limit = base.raw_signals.stop_loss_by_limit.to_numpy()
         stop_loss_by_limit[0] = -1.0
         stop_loss_by_limit_true = np.greater(stop_loss_by_limit, 0)

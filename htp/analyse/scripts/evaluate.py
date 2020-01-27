@@ -1,10 +1,10 @@
 """A command line script to generate trade signals from select sma crosses
 calculated from given ticker data."""
-from uuid import uuid4
-from celery import group
+# from uuid import uuid4
+# from celery import group
 from htp.aux import tasks
 from htp.aux.database import db_session
-from htp.aux.models import getTickerTask, genSignalTask
+from htp.aux.models import getTickerTask
 
 
 def get_data(ticker, granularity, system, db=True):
@@ -25,47 +25,42 @@ def get_data(ticker, granularity, system, db=True):
     db : boolean
         Flag to enable db recording.
     """
+    # removing all checks, will implement later.
+    mid = db_session.query(getTickerTask).filter(
+        getTickerTask.ticker == ticker, getTickerTask.price == 'M',
+        getTickerTask.granularity == granularity).first()
+    ask = db_session.query(getTickerTask).filter(
+        getTickerTask.ticker == ticker, getTickerTask.price == 'A',
+        getTickerTask.granularity == granularity).first()
+    bid = db_session.query(getTickerTask).filter(
+        getTickerTask.ticker == ticker, getTickerTask.price == 'B',
+        getTickerTask.granularity == granularity).first()
 
-    batch_id = None
-    if db:
-        entry = db_session.query(getTickerTask).filter(
-            getTickerTask.ticker == ticker, getTickerTask.price == 'M',
-            getTickerTask.granularity == f'{granularity.split(" ")[0]}'
-        ).first()
-        if entry is None:
-            # Indirect check to confirm pre-existing ticker data.
-            return f"No data has been stored for {ticker} in {granularity} \
-intervals."
-        batch_id = entry.id
-        ids = {}
-        for s in system:
-            ids[f"{s[0]} s[1]}"] = {}
-            for trade in ['buy', 'sell']:
-                ids[k][trade] = uuid4()
-                db_session.add(genSignalTask(
-                    id=ids[k][trade], batch_id=batch_id, fast=k[0], slow=k[1],
-                    direction=trade, strategy="trailing_atr_6"))
-        db_session.commit()
+    for s in system:
+        for trade in ['buy', 'sell']:
+            tasks.gen_signals.delay(
+                mid.id, ask.id, bid.id, s.split(' ')[0], s.split(' ')[1],
+                trade, multiplier=6.0)
 
-    for P in ['M', 'B', 'A']:
-        df = base + g + 'price.h5'
-        files.append((df, f'{P}', P))
+    # for P in ['M', 'B', 'A']:
+    #     df = base + g + 'price.h5'
+    #     files.append((df, f'{P}', P))
 
-    files.append((base + g + 'indicators.h5', 'I', 'target'))
+    # files.append((base + g + 'indicators.h5', 'I', 'target'))
 
-    sup_indicators = base + f'{granularity.split(" ")[1]}/indicators.h5'
-    if granularity.split(" ")[1] != 'None':
-        files.append((sup_indicators, 'I', 'sup'))
+    # sup_indicators = base + f'{granularity.split(" ")[1]}/indicators.h5'
+    # if granularity.split(" ")[1] != 'None':
+    #     files.append((sup_indicators, 'I', 'sup'))
 
-    load = tasks.load_signal_data.s(files)
+    # load = tasks.load_signal_data.s(files)
     # return load.delay()
 
-    s = []
-    for k in system:
-        for trade in ['buy', 'sell']:
-            s.append(tasks.gen_signals.s(
-                k.split(' ')[0], k.split(' ')[1], trade, ticker,
-                granularity.split(" ")[0], 6, task_id=ids[k][trade]))
-    gen = group(s)
+    # s = []
+    # for k in system:
+    #     for trade in ['buy', 'sell']:
+    #         s.append(tasks.gen_signals.s(
+    #             k.split(' ')[0], k.split(' ')[1], trade, ticker,
+    #             granularity.split(" ")[0], 6, task_id=ids[k][trade]))
+    # gen = group(s)
 
-    return (load | gen).delay()
+    # return (load | gen).delay()
