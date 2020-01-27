@@ -14,30 +14,22 @@ def get_data(ticker, granularity, db=True):
     """Function that enqueues indicator calculations in celery to be actioned
     by a rabbitmq backend."""
 
-    task_id = None
-    if db:
-        entry = db_session.query(getTickerTask).filter(
-            getTickerTask.ticker == ticker, getTickerTask.price == 'M',
-            getTickerTask.granularity == granularity).first()
-        if entry is None:
-            # Indirect check to confirm pre-existing ticker data.
-            return f"No data has been stored for {ticker} in {granularity} \
-intervals."
-        task_id = entry.id
-        indicator = db_session.query(indicatorTask).get(task_id)
-        if indicator is None:
-            db_session.add(indicatorTask(get_id=task_id))
-        else:
-            for i in ['adx_status', 'atr_status', 'stochastic_status',
-                      'rsi_status', 'macd_status', 'ichimoku_status',
-                      'sma_status', 'status']:
-                setattr(indicator, i, 0)
-            for table in [
-              smoothmovingaverage, ichimokukinkohyo, movavgconvdiv,
-              momentum, relativestrengthindex, stochastic]:
-                db_session.query(
-                    table).filter(table.batch_id == entry.id).delete(
-                        synchronize_session=False)
+    entry = db_session.query(getTickerTask).filter(
+        getTickerTask.ticker == ticker, getTickerTask.price == 'M',
+        getTickerTask.granularity == granularity).first()
+    task_id = entry.id
+    indicator = db_session.query(indicatorTask).get(task_id)
+    if indicator is None:
+        db_session.add(indicatorTask(get_id=task_id))
+    else:
+        for i in ['adx_status', 'atr_status', 'stochastic_status',
+                  'rsi_status', 'macd_status', 'ichimoku_status', 'sma_status',
+                  'status']:
+            setattr(indicator, i, 0)
+        for table in [smoothmovingaverage, ichimokukinkohyo, movavgconvdiv,
+                      momentum, relativestrengthindex, stochastic]:
+            db_session.query(table).filter(table.batch_id == entry.id).delete(
+                synchronize_session=False)
         db_session.commit()
 
     tasks.set_smooth_moving_average.delay(task_id)

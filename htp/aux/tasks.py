@@ -206,6 +206,47 @@ def set_momentum(task_id):
         r, momentum, indicatorTask, ('atr_status', 'adx_status'), task_id)
 
 
+@celery.task(ignore_result=True)
+def gen_signals(mid_id, ask_id, bid_id, fast, slow, trade, multiplier=6.0):
+
+    price = {'buy': {'entry': ask_id, 'exit': bid_id},
+             'sell': {'entry': bid_id, 'exit': ask_id}}
+    mid_close = load_data(mid_id, 'candles', ['timestamp', 'close'])
+    entry = load_data(price[trade]['entry'], 'candles', ['timestamp', 'open'])
+    entry.rename(columns={'open': 'entry_open'}, inplace=True)
+    exit_ = load_data(
+        price[trade]['exit'], 'candles', ['timestamp', 'open', 'high', 'low'])
+    exit_.rename(
+        columns={'open': 'exit_open', 'high': 'exit_high', 'low': 'exit_low'},
+        inplace=True)
+    atr = load_data(mid_id, 'momentum', ['timestamp', 'atr'])
+    dfsys = load_data(mid_id, 'smoothmovingaverage', ['timestamp', fast, slow])
+    df = pd.concat([mid_close, entry, exit_, atr, dfsys], axis=1)
+    df.dropna(inplace=True)
+
+    sys_signals = evaluate_fast.Signals.atr_stop_signals(
+        df, fast, slow, multiplier=multiplier, trade=trade)
+
+    sys_signals['get_id'] = mid_id
+
+    sys_entry = db_session.query(genSignalTask).filter(
+        genSignalTask.batch_id == mid_id, genSignalTask.fast == fast,
+        genSignalTask.slow == slow, genSignalTask.trade_direction == trade,
+        genSignalTask.exit_strategy == 'trailing_atr_6').first()
+    if sys_entry is None:
+        sys_id = uuid4()
+        db_session.add(genSignalTask(
+            id=sys_id, batch_id=mid_id, fast=fast, slow=slow,
+            trade_direction=trade, exit_strategy='trailing_atr_6'))
+    else:
+        sys_id = sys_entry.id
+        setattr(signals, 'status', 0)
+        db_session.query(signals).filter(signals.batch_id == sys_id).delete(
+            synchronize_session=False)
+    db_session.commit()
+    save_data(sys_signals, signals, genSignalTask, ('status',), sys_id)
+
+
 @celery.task
 def load_signal_data(data):
     d = {}
@@ -247,47 +288,6 @@ def load_signal_data(data):
     # for i in d.keys():
     #     print(f"{i}: {len(d[i])}")
     #     print(d[i].columns)
-
-
-@celery.task(ignore_result=True)
-def gen_signals(mid_id, ask_id, bid_id, fast, slow, trade, multiplier=6.0):
-
-    price = {'buy': {'entry': ask_id, 'exit': bid_id},
-             'sell': {'entry': bid_id, 'exit': ask_id}}
-    mid_close = load_data(mid_id, 'candles', ['timestamp', 'close'])
-    entry = load_data(price[trade]['entry'], 'candles', ['timestamp', 'open'])
-    entry.rename(columns={'open': 'entry_open'}, inplace=True)
-    exit_ = load_data(
-        price[trade]['exit'], 'candles', ['timestamp', 'open', 'high', 'low'])
-    exit_.rename(
-        columns={'open': 'exit_open', 'high': 'exit_high', 'low': 'exit_low'},
-        inplace=True)
-    atr = load_data(mid_id, 'momentum', ['timestamp', 'atr'])
-    dfsys = load_data(mid_id, 'smoothmovingaverage', ['timestamp', fast, slow])
-    df = pd.concat([mid_close, entry, exit_, atr, dfsys], axis=1)
-    df.dropna(inplace=True)
-
-    sys_signals = evaluate_fast.Signals.atr_stop_signals(
-        df, fast, slow, multiplier=multiplier, trade=trade)
-
-    sys_signals['get_id'] = mid_id
-
-    sys_entry = db_session.query(genSignalTask).filter(
-        genSignalTask.batch_id == mid_id, genSignalTask.fast == fast,
-        genSignalTask.slow == slow, genSignalTask.trade_direction == trade,
-        genSignalTask.exit_strategy == 'trailing_atr_6').first()
-    if sys_entry is None:
-        sys_id = uuid4()
-        db_session.add(genSignalTask(
-            id=sys_id, batch_id=mid_id, fast=fast, slow=slow,
-            trade_direction=trade, exit_strategy="trailing_atr_6"))
-    else:
-        sys_id = sys_entry.id
-        setattr(signals, 'status', 0)
-        db_session.query(signals).filter(signals.batch_id == sys_id).delete(
-            synchronize_session=False)
-    db_session.commit()
-    save_data(sys_signals, signals, genSignalTask, ('status',), sys_id)
 
     # close_to_close = observe.close_in_atr(data['M'], ATR)
     # close_to_fast_signal = observe.close_to_signal_by_atr(
