@@ -1,7 +1,7 @@
 # import os
 # import sys
 import requests
-# import numpy as np
+import numpy as np
 import pandas as pd
 from uuid import UUID, uuid4
 from htp import celery
@@ -11,11 +11,12 @@ from celery import Task
 from celery.result import AsyncResult
 # from datetime import datetime
 from htp.api.oanda import Candles
+from htp.toolbox import calculator
 from sqlalchemy import select, MetaData, Table
 from htp.aux.database import db_session, engine
-from htp.analyse import indicator, evaluate_fast, observe
+from htp.analyse import indicator, evaluate_fast, observe, machine_learn
 from htp.aux.models import getTickerTask, subTickerTask, indicatorTask,\
-        genSignalTask, candles, moving_average, signals
+        genSignalTask, candles, moving_average, signals, trade_results
 
 
 class SessionTask(Task, Api):
@@ -257,3 +258,106 @@ def conv_price(check, signal_join_column, signal_target_column, conv_batch_id,
 
     db_session.commit()
     return True
+
+
+@celery.task(ignore_result=True)
+def setup_predict(ticker, granularity, fast, slow, direction):
+    entry = db_session.query(getTickerTask).filter(
+        getTickerTask.ticker == ticker, getTickerTask.granularity ==
+        granularity, getTickerTask.price == 'M').first()
+
+    sys = db_session.query(genSignalTask).filter(
+        genSignalTask.batch_id == entry.id, genSignalTask.fast == fast,
+        genSignalTask.slow == slow, genSignalTask.trade_direction == direction
+        ).first()
+
+    db_session.query(trade_results).filter(
+        trade_results.batch_id == sys.id).delete(synchronize_session=False)
+
+    sys_data = load_data(
+        sys.id, 'signals',
+        ['entry_datetime', 'entry_price', 'stop_loss', 'exit_datetime',
+         'exit_price', 'conv_entry_price', 'conv_exit_price', 'target_percK',
+         'target_percD', 'target_macd', 'target_signal', 'target_histogram',
+         'target_rsi', 'target_adx', 'target_iky_cat', 'sup_percK',
+         'sup_percD', 'sup_macd', 'sup_signal', 'sup_histogram', 'sup_rsi',
+         'sup_adx', 'sup_iky_cat', 'close_in_atr', 'close_to_fast_by_atr',
+         'close_to_slow_by_atr'], index_col='entry_datetime', dates_cols=[
+             'entry_datetime', 'exit_datetime'])
+
+    db_session.commit()
+
+    sys_data.dropna(inplace=True)
+    sys_data.drop(sys_data[sys_data['stop_loss'] <= 0].index, inplace=True)
+
+    train_sample_size = 500
+    test_sample_size = 50
+    num_chunks = ((len(sys_data) - train_sample_size - test_sample_size) /
+                  test_sample_size) + 2
+    chunks = []
+    for ind in range(int(num_chunks)):
+        chunks.append(
+            (ind * test_sample_size,
+             ind * test_sample_size + train_sample_size + test_sample_size))
+
+    for i in chunks:
+        action_predict.delay(sys.id, i, ticker, direction, train_sample_size)
+
+
+@celery.task(ignore_result=True)
+def action_predict(sys_id, chunk, ticker, direction, train_sample_size):
+    sys_data = load_data(
+        sys_id, 'signals',
+        ['entry_datetime', 'entry_price', 'stop_loss', 'exit_datetime',
+         'exit_price', 'conv_entry_price', 'conv_exit_price', 'target_percK',
+         'target_percD', 'target_macd', 'target_signal', 'target_histogram',
+         'target_rsi', 'target_adx', 'target_iky_cat', 'sup_percK',
+         'sup_percD', 'sup_macd', 'sup_signal', 'sup_histogram', 'sup_rsi',
+         'sup_adx', 'sup_iky_cat', 'close_in_atr', 'close_to_fast_by_atr',
+         'close_to_slow_by_atr'], index_col='entry_datetime', dates_cols=[
+             'entry_datetime', 'exit_datetime'])
+
+    sys_data.dropna(inplace=True)
+    sys_data.drop(sys_data[sys_data['stop_loss'] <= 0].index, inplace=True)
+    sys_data.reset_index(inplace=True)
+    data = sys_data.iloc[chunk[0]:chunk[1]].copy()
+
+    results = calculator.count(
+        data, ticker, 1000, 0.01, direction, conv=True)
+    performance = calculator.performance_stats(results[0:train_sample_size])
+    if performance['win_%'] < 20.:
+        return None
+
+    results["win_loss"] = np.where(results["PL_AUD"] > 0, 1, 0)
+    model_data = results.drop(
+        ['entry_price', 'stop_loss', 'exit_datetime', 'exit_price',
+         'conv_entry_price', 'conv_exit_price', 'PL_PIPS', 'POS_SIZE',
+         'PL_AUD', 'PL_REALISED'], axis=1).copy()
+
+    model_data.set_index('entry_datetime', inplace=True)
+
+    prediction_results, win_rate, all_feature_score, top_feature_score =\
+        machine_learn.predict(model_data, train_sample_size)
+
+    if prediction_results is not None:
+
+        prediction_en_ex = sys_data[sys_data["entry_datetime"].isin(
+            prediction_results.index)].copy()
+        prediction_en_ex.reset_index(drop=True, inplace=True)
+        live_results = calculator.count(
+            prediction_en_ex, ticker, 1000, 0.01, direction, conv=True)
+
+        live_results['batch_id'] = sys_id
+        upload = live_results[[
+            'batch_id', 'exit_datetime', 'PL_PIPS', 'POS_SIZE', 'PL_AUD',
+            'PL_REALISED']].copy()
+
+        rows = upload.to_dict('records')
+        db_session.bulk_insert_mappings(trade_results, rows)
+        db_session.commit()
+        db_session.close()
+
+    return None
+
+
+# performance = calculator.performance_stats(live_results)

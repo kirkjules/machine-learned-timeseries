@@ -401,11 +401,11 @@ def count(trades, ticker, amount, RISK_PERC, trade_type, conv=False):
 
     coeff = {'sell': -1, 'buy': 1}
 
-    trades["P/L PIPS"] = trades.apply(
-        lambda x: (
-            (Decimal(x["exit_price"]) - Decimal(x["entry_price"]))
-            * Decimal(f"{KNOWN_RATIO[0]}") * coeff[trade_type]).quantize(
-                Decimal(".1")), axis=1)
+    trades["PL_PIPS"] = trades.apply(
+        lambda x: (float(
+            ((Decimal(x["exit_price"]) - Decimal(x["entry_price"]))
+             * Decimal(f"{KNOWN_RATIO[0]}") * coeff[trade_type]).quantize(
+                Decimal(".1")))), axis=1)
 
     d_pos_size = {}
     stop = list(trades.columns).index('stop_loss') + 1
@@ -428,7 +428,8 @@ def count(trades, ticker, amount, RISK_PERC, trade_type, conv=False):
             CONV=conv_exit, TRADE=trade_type)
         AMOUNT += profit
         d_pos_size[trade[entry_dt]] = {
-            "POS_SIZE": size, "P/L AUD": profit, "P/L REALISED": AMOUNT}
+            "POS_SIZE": int(size), "PL_AUD": float(profit), "PL_REALISED":
+            float(AMOUNT)}
     counting = pd.DataFrame.from_dict(d_pos_size, orient="index")
     entry_exit_complete = trades.merge(
         counting, how="left", left_on="entry_datetime", right_index=True,
@@ -543,25 +544,25 @@ def performance_stats(results):
     """
 
     stats = {}
-    stats["net_profit"] = results.iloc[-1]["P/L REALISED"] - 1000
+    stats["net_profit"] = results.iloc[-1]["PL_REALISED"] - 1000
 
     stats["win_%"] = Decimal(
-        results[results["P/L AUD"] > 0]["P/L AUD"].count() /
-        results["P/L AUD"].count() *
+        results[results["PL_AUD"] > 0]["PL_AUD"].count() /
+        results["PL_AUD"].count() *
         100).quantize(Decimal("0.01"))
     stats["loss_%"] = Decimal(
-        results[results["P/L AUD"] < 0]["P/L AUD"].count() /
-        results["P/L AUD"].count() *
+        results[results["PL_AUD"] < 0]["PL_AUD"].count() /
+        results["PL_AUD"].count() *
         100).quantize(Decimal("0.01"))
 
-    stats["win_max"] = results["P/L AUD"].max()
-    stats["loss_max"] = results["P/L AUD"].min()
+    stats["win_max"] = results["PL_AUD"].max()
+    stats["loss_max"] = results["PL_AUD"].min()
 
     stats["win_mean"] = Decimal(
-        results[results["P/L AUD"] > 0]["P/L AUD"].mean()
+        results[results["PL_AUD"] > 0]["PL_AUD"].mean()
         ).quantize(Decimal("0.01"))
     stats["loss_mean"] = Decimal(
-        results[results["P/L AUD"] < 0]["P/L AUD"].mean()
+        results[results["PL_AUD"] < 0]["PL_AUD"].mean()
         ).quantize(Decimal("0.01"))
 
     holding_time = results["exit_datetime"] - results["entry_datetime"]
@@ -571,13 +572,13 @@ def performance_stats(results):
     cons_loss = 0
     list_cons_loss = []
     for row in results.iterrows():
-        if row[1]["P/L AUD"] < 0:
+        if row[1]["PL_AUD"] < 0:
             cons_loss += 1
             if cons_loss == 1:
                 list_cons_loss.append(copy.deepcopy(cons_loss))
             else:
                 list_cons_loss[-1] = copy.deepcopy(cons_loss)
-        elif row[1]["P/L AUD"] >= 0:
+        elif row[1]["PL_AUD"] >= 0:
             cons_loss = 0
 
     if len(list_cons_loss) > 0:

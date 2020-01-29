@@ -233,3 +233,15 @@ class signals(Base):
     sup_histogram = Column(Float(precision=6))
     sup_adx = Column(Float(precision=6))
     sup_iky_cat = Column(String(120))
+
+
+class trade_results(Base):
+    __tablename__ = 'trade_results'
+    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
+    batch_id = Column(
+        UUID(as_uuid=True), ForeignKey("genSignalTask.id"), unique=False)
+    exit_datetime = Column(DateTime())
+    PL_PIPS = Column(Float(precision=2))
+    POS_SIZE = Column(Integer)
+    PL_AUD = Column(Float(precision=2))
+    PL_REALISED = Column(Float(precision=2))

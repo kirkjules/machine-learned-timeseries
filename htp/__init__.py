@@ -53,4 +53,7 @@ def create_app():
     from htp.views import signal_prep
     app.register_blueprint(signal_prep.bp)
 
+    from htp.views import predict
+    app.register_blueprint(predict.bp)
+
     return app
