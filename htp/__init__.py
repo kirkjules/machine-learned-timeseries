@@ -50,4 +50,7 @@ def create_app():
     from htp.views import signal
     app.register_blueprint(signal.bp)
 
+    from htp.views import signal_prep
+    app.register_blueprint(signal_prep.bp)
+
     return app

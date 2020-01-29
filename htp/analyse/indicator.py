@@ -5,7 +5,8 @@ DataFrame format.
 
 import numpy as np
 import pandas as pd
-from decimal import Decimal
+# from decimal import Decimal
+from htp.analyse.evaluate import iky_cat
 
 
 def smooth_moving_average(df1, df2=None, column="close", period=10,
@@ -142,8 +143,11 @@ def ichimoku_kinko_hyo(data, conv=9, base=26, lead=52):
         L, left_index=True, right_index=True).mean(
             1).shift(26).to_frame(name="senkou_B")
 
-    return pd.concat([tenkan, kijun, chikou, senkou_A, senkou_B],
-                     axis=1).round(6)
+    df = pd.concat(
+        [tenkan, kijun, chikou, senkou_A, senkou_B], axis=1).round(6)
+    df['iky_cat'] = df[['tenkan', 'kijun', 'senkou_A', 'senkou_B']].apply(
+        iky_cat, axis=1)
+    return df
 
 
 def relative_strength_index(data, period=14):
@@ -233,6 +237,7 @@ def relative_strength_index(data, period=14):
 
     rs = pd.DataFrame.from_dict(r, orient="index")
     rs["rsi"] = rs.apply(lambda x: 100 - (100 / (1 + x["rs"])), axis=1)
+    rs.index.rename('timestamp', inplace=True)
 
     return rs.round(6)
 
@@ -573,6 +578,14 @@ class Momentum:
                     col = 1
                     count += 1
             return it.operands[1]
+
+
+def momentum(df):
+    atr = Momentum.average_true_range(df)
+    adx = Momentum.average_directional_movement(df)
+    m = atr.merge(
+        adx, how="left", left_index=True, right_index=True, validate='1:1')
+    return m
 
 
 if __name__ == "__main__":

@@ -84,17 +84,19 @@ class indicatorTask(Base):
     status = Column(Integer)
 
 
-class ichimokukinkohyo(Base):
-    __tablename__ = 'ichimokukinkohyo'
+class ichimoku(Base):
+    __tablename__ = 'ichimoku'
     id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
     batch_id = Column(
         UUID(as_uuid=True), ForeignKey("getTickerTask.id"), unique=False)
     timestamp = Column(DateTime())
+    timestamp_shift = Column(DateTime())
     tenkan = Column(Float(precision=6))
     kijun = Column(Float(precision=6))
     chikou = Column(Float(precision=6))
     senkou_A = Column(Float(precision=6))
     senkou_B = Column(Float(precision=6))
+    iky_cat = Column(String(120))
 
 
 class stochastic(Base):
@@ -103,16 +105,18 @@ class stochastic(Base):
     batch_id = Column(
         UUID(as_uuid=True), ForeignKey("getTickerTask.id"), unique=False)
     timestamp = Column(DateTime())
+    timestamp_shift = Column(DateTime())
     percK = Column(Float(precision=6))
     percD = Column(Float(precision=6))
 
 
-class relativestrengthindex(Base):
-    __tablename__ = 'relativestrengthindex'
+class relative_strength(Base):
+    __tablename__ = 'relative_strength'
     id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
     batch_id = Column(
         UUID(as_uuid=True), ForeignKey("getTickerTask.id"), unique=False)
     timestamp = Column(DateTime())
+    timestamp_shift = Column(DateTime())
     avg_gain = Column(Float(precision=6))
     avg_loss = Column(Float(precision=6))
     rs = Column(Float(precision=6))
@@ -125,16 +129,18 @@ class momentum(Base):
     batch_id = Column(
         UUID(as_uuid=True), ForeignKey("getTickerTask.id"), unique=False)
     timestamp = Column(DateTime())
+    timestamp_shift = Column(DateTime())
     atr = Column(Float(precision=6))
     adx = Column(Float(precision=6))
 
 
-class movavgconvdiv(Base):
-    __tablename__ = 'movavgconvdiv'
+class convergence_divergence(Base):
+    __tablename__ = 'convergence_divergence'
     id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
     batch_id = Column(
         UUID(as_uuid=True), ForeignKey("getTickerTask.id"), unique=False)
     timestamp = Column(DateTime())
+    timestamp_shift = Column(DateTime())
     emaF = Column(Float(precision=6))
     emaS = Column(Float(precision=6))
     macd = Column(Float(precision=6))
@@ -142,8 +148,8 @@ class movavgconvdiv(Base):
     histogram = Column(Float(precision=6))
 
 
-class smoothmovingaverage(Base):
-    __tablename__ = 'smoothmovingaverage'
+class moving_average(Base):
+    __tablename__ = 'moving_average'
     id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
     batch_id = Column(
         UUID(as_uuid=True), ForeignKey("getTickerTask.id"), unique=False)
@@ -206,3 +212,24 @@ class signals(Base):
     stop_loss = Column(Float(precision=6))
     exit_datetime = Column(DateTime())
     exit_price = Column(Float(precision=6))
+    conv_entry_price = Column(Float(precision=6))
+    conv_exit_price = Column(Float(precision=6))
+    close_in_atr = Column(Integer)
+    close_to_fast_by_atr = Column(Float(precision=6))
+    close_to_slow_by_atr = Column(Float(precision=6))
+    target_percD = Column(Float(precision=6))
+    target_percK = Column(Float(precision=6))
+    target_rsi = Column(Float(precision=6))
+    target_macd = Column(Float(precision=6))
+    target_signal = Column(Float(precision=6))
+    target_histogram = Column(Float(precision=6))
+    target_adx = Column(Float(precision=6))
+    target_iky_cat = Column(String(120))
+    sup_percD = Column(Float(precision=6))
+    sup_percK = Column(Float(precision=6))
+    sup_rsi = Column(Float(precision=6))
+    sup_macd = Column(Float(precision=6))
+    sup_signal = Column(Float(precision=6))
+    sup_histogram = Column(Float(precision=6))
+    sup_adx = Column(Float(precision=6))
+    sup_iky_cat = Column(String(120))

@@ -1,6 +1,7 @@
 # import os
 # import sys
 import requests
+# import numpy as np
 import pandas as pd
 from uuid import UUID, uuid4
 from htp import celery
@@ -12,10 +13,9 @@ from celery.result import AsyncResult
 from htp.api.oanda import Candles
 from sqlalchemy import select, MetaData, Table
 from htp.aux.database import db_session, engine
-from htp.analyse import indicator, evaluate, evaluate_fast  # , observe
+from htp.analyse import indicator, evaluate_fast, observe
 from htp.aux.models import getTickerTask, subTickerTask, indicatorTask,\
-        genSignalTask, candles, smoothmovingaverage, ichimokukinkohyo,\
-        movavgconvdiv, momentum, stochastic, relativestrengthindex, signals
+        genSignalTask, candles, moving_average, signals
 
 
 class SessionTask(Task, Api):
@@ -110,15 +110,16 @@ def merge_data(results, ticker, price, granularity, task_id=None):
             save_data(df, candles, getTickerTask, ('status',), task_id[f'{k}'])
 
 
-def load_data(task_id, model, columns):
+def load_data(task_id, model, columns, index_col='timestamp',
+              dates_cols=['timestamp']):
     _id = str(task_id)
     metadata = MetaData(bind=None)
     table = Table(model, metadata, autoload=True, autoload_with=engine)
     stmt = select([getattr(table.c, col) for col in columns]).where(
         table.columns.batch_id == _id)
-    df = pd.read_sql(
-        stmt, engine, index_col='timestamp', parse_dates=['timestamp'],
-        columns=columns)
+    df = pd.read_sql(stmt, engine, index_col=index_col, parse_dates=dates_cols,
+                     columns=columns)
+    df.sort_index(inplace=True)
     return df
 
 
@@ -138,6 +139,29 @@ def save_data(df, data_table, record_table, record_columns, task_id):
 
 
 @celery.task(ignore_result=True)
+def set_indicator(task_id, func, table, task_cols, target=None, shift=-1):
+    df_indicate = load_data(
+        task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
+    df = func(df_indicate)
+
+    if target:
+        df_target = load_data(
+            target, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
+        df_merge = df_target.merge(
+            df, how='left', left_index=True, right_index=True, validate='1:1')
+        df_merge.drop(['open', 'high', 'low', 'close'], axis=1, inplace=True)
+        df_merge.fillna(method='ffill', inplace=True)
+    else:
+        df_merge = df.copy()
+
+    df_merge.reset_index(inplace=True)
+    df_merge['timestamp_shift'] = df_merge['timestamp'].shift(shift)
+    df_merge.dropna(subset=['timestamp_shift'], axis=0, inplace=True)
+
+    save_data(df_merge, table, indicatorTask, task_cols,  task_id)
+
+
+@celery.task(ignore_result=True)
 def set_smooth_moving_average(task_id):
     df = load_data(
         task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
@@ -151,59 +175,7 @@ def set_smooth_moving_average(task_id):
 
     r = pd.concat(avgs, axis=1)
     r.reset_index(inplace=True)
-    save_data(r, smoothmovingaverage, indicatorTask, ('sma_status',), task_id)
-
-
-@celery.task(ignore_result=True)
-def set_ichimoku_kinko_hyo(task_id):
-    df = load_data(
-        task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
-    r = indicator.ichimoku_kinko_hyo(df)
-    r.reset_index(inplace=True)
-    save_data(
-        r, ichimokukinkohyo, indicatorTask, ('ichimoku_status',), task_id)
-
-
-@celery.task(ignore_result=True)
-def set_moving_average_convergence_divergence(task_id):
-    df = load_data(
-        task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
-    macd = indicator.moving_average_convergence_divergence(df)
-    macd.reset_index(inplace=True)
-    save_data(macd, movavgconvdiv, indicatorTask, ('macd_status',), task_id)
-
-
-@celery.task(ignore_result=True)
-def set_stochastic(task_id):
-    df = load_data(
-        task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
-    stoch = indicator.stochastic(df)
-    stoch.reset_index(inplace=True)
-    save_data(
-        stoch, stochastic, indicatorTask, ('stochastic_status',), task_id)
-
-
-@celery.task(ignore_result=True)
-def set_relative_strength_index(task_id):
-    df = load_data(
-        task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
-    rsi = indicator.relative_strength_index(df)
-    rsi.reset_index(inplace=True)
-    save_data(
-        rsi, relativestrengthindex, indicatorTask, ('rsi_status',), task_id)
-
-
-@celery.task(ignore_result=True)
-def set_momentum(task_id):
-    df = load_data(
-        task_id, 'candles', ['timestamp', 'open', 'high', 'low', 'close'])
-    atr = indicator.Momentum.average_true_range(df)
-    adx = indicator.Momentum.average_directional_movement(df)
-    r = atr.merge(adx, how="left", left_index=True, right_index=True,
-                  validate="1:1")
-    r.reset_index(inplace=True)
-    save_data(
-        r, momentum, indicatorTask, ('atr_status', 'adx_status'), task_id)
+    save_data(r, moving_average, indicatorTask, ('sma_status',), task_id)
 
 
 @celery.task(ignore_result=True)
@@ -220,12 +192,24 @@ def gen_signals(mid_id, ask_id, bid_id, fast, slow, trade, multiplier=6.0):
         columns={'open': 'exit_open', 'high': 'exit_high', 'low': 'exit_low'},
         inplace=True)
     atr = load_data(mid_id, 'momentum', ['timestamp', 'atr'])
-    dfsys = load_data(mid_id, 'smoothmovingaverage', ['timestamp', fast, slow])
+    dfsys = load_data(mid_id, 'moving_average', ['timestamp', fast, slow])
     df = pd.concat([mid_close, entry, exit_, atr, dfsys], axis=1)
     df.dropna(inplace=True)
 
     sys_signals = evaluate_fast.Signals.atr_stop_signals(
         df, fast, slow, multiplier=multiplier, trade=trade)
+
+    close_to_close = observe.close_in_atr(mid_close, atr)
+    close_to_fast_signal = observe.close_to_signal_by_atr(
+        mid_close, dfsys, fast, atr)
+    close_to_slow_signal = observe.close_to_signal_by_atr(
+        mid_close, dfsys, slow, atr, speed='slow')
+    obs = pd.concat(
+        [close_to_close, close_to_fast_signal, close_to_slow_signal], axis=1)
+    obs_shift = obs.shift(1)
+    sys_signals = sys_signals.merge(
+        obs_shift, how='left', left_on='entry_datetime', right_index=True,
+        validate='1:1')
 
     sys_signals['get_id'] = mid_id
 
@@ -247,89 +231,29 @@ def gen_signals(mid_id, ask_id, bid_id, fast, slow, trade, multiplier=6.0):
     save_data(sys_signals, signals, genSignalTask, ('status',), sys_id)
 
 
-@celery.task
-def load_signal_data(data):
-    d = {}
-    for files in data:
-        with pd.HDFStore(files[0]) as store:  # filename
-            d[files[2]] = store[files[1]]  # key
+@celery.task()
+def prep_signals(check, table, targets, batch_id, sys_id, property_type):
+    for s, d in db_session.query(signals, table).\
+                join(table, signals.entry_datetime == table.timestamp_shift).\
+                filter(table.batch_id == batch_id).\
+                filter(signals.batch_id == sys_id).all():
+        for target in targets:
+            setattr(s, f'{property_type}_{target}', getattr(d, target))
 
-    sma = [s for s in d['target'].columns if "close_sma_" in s]
-    d['sys'] = d['target'][sma].copy()
+    db_session.commit()
+    return True
 
-    d['target']['iky_cat'] = d['target'][
-        ['tenkan', 'kijun', 'senkou_A', 'senkou_B']].apply(
-            evaluate.iky_cat, axis=1)
 
-    i = ['%K', '%D', 'RSI', 'MACD', 'Signal', 'Histogram', 'ADX', 'ATR',
-         'iky_cat']
-    prop = d['target'][i].copy()
-    del d['target']
-    if 'sup' in d.keys():
-        d['sup']['iky_cat'] = d['sup'][
-            ['tenkan', 'kijun', 'senkou_A', 'senkou_B']].apply(
-                evaluate.iky_cat, axis=1)
-        sup_prop = d['sup'][i].copy()
-        del d['sup']
-        prop = prop.merge(
-            sup_prop, how="left", left_index=True, right_index=True,
-            suffixes=("_target", "_sup"))
-        prop.fillna(method="ffill", inplace=True)
-    else:
-        cols = {}
-        for label in i:
-            cols[label] = f"{label}_target"
-        prop.rename(columns=cols, inplace=True)
+@celery.task()
+def conv_price(check, signal_join_column, signal_target_column, conv_batch_id,
+               sys_id):
+    # update conv exit price
+    for u, a in db_session.query(signals, candles.open).\
+                join(candles, getattr(signals, signal_join_column) ==
+                     candles.timestamp).\
+                filter(candles.batch_id == conv_batch_id).\
+                filter(signals.batch_id == sys_id).all():
+        setattr(u, signal_target_column, a)
 
-    d['prop'] = prop
-    return d
-    # testing
-    # print(sys.getsizeof(d))
-    # for i in d.keys():
-    #     print(f"{i}: {len(d[i])}")
-    #     print(d[i].columns)
-
-    # close_to_close = observe.close_in_atr(data['M'], ATR)
-    # close_to_fast_signal = observe.close_to_signal_by_atr(
-    #     data['M'], data_sys, fast, ATR)
-    # close_to_slow_signal = observe.close_to_signal_by_atr(
-    #     data['M'], data_sys, slow, ATR)
-
-    # properties = pd.concat([data['prop'], close_to_close,
-    # close_to_fast_signal,
-    #                        close_to_slow_signal], axis=1)
-    # properties = properties.shift(1)  # very important, match most recent
-    # known
-    # property to proceeding timestamp where trade is entered.
-    # for s in properties.columns:
-    #     if "ATR_" in s:
-    #         properties.drop([s], axis=1, inplace=True)
-
-    # signals_with_properties = sys_signals.merge(
-    #     properties, how="inner", left_on="entry_datetime", right_index=True,
-    #     validate="1:1")
-
-    # signals_with_properties["close_in_atr"] = pd.to_numeric(
-    #     signals_with_properties["close_in_atr"], errors="coerce",
-    #     downcast='integer')
-
-    # converts values from decimal objects into float32 and then float64 to
-    # round.
-    # for col in ["exit_price", "stop_loss"]:
-    #     signals_with_properties[col] = pd.to_numeric(
-    #         signals_with_properties[col], errors="coerce",
-    #         downcast='float').astype(float)
-
-    # signals_with_properties = signals_with_properties.round(
-    #     {"entry_price": exp, "exit_price": exp, "stop_loss": exp})
-
-    # path = f"/Users/juleskirk/Documents/projects/htp/data/{ticker}/\
-    # {granularity}/signals"
-    # if not os.path.isdir(path):
-    #     os.mkdir(path)
-
-    # signals_with_properties.to_hdf(
-    #     f"{path}/{trade}-{fast}-{slow}.h5", 'S',  mode='w', format='table',
-    #     complevel=9)
-
-    # record(genSignalTask, ('status',), task_id=task_id)
+    db_session.commit()
+    return True
