@@ -257,12 +257,20 @@ def conv_price(self, prev_id, signal_join_column, signal_target_column,
     if prev_id is not None:
         AsyncResult(prev_id).forget()
 
-    for u, a in db_session.query(signals, candles.open).\
-            join(candles, getattr(signals, signal_join_column) ==
-                 candles.timestamp).\
-            filter(candles.batch_id == conv_batch_id).\
-            filter(signals.batch_id == sys_id).all():
-        setattr(u, signal_target_column, a)
+    if not conv_batch_id:
+        for r in db_session.query(signals).\
+                 filter(signals.batch_id == sys_id).all():
+            if signal_target_column == 'conv_entry_price':
+                r.conv_entry_price = r.entry_price
+            elif signal_target_column == 'conv_exit_price':
+                r.conv_exit_price = r.exit_price
+    else:
+        for u, a in db_session.query(signals, candles.open).\
+                join(candles, getattr(signals, signal_join_column) ==
+                     candles.timestamp).\
+                filter(candles.batch_id == conv_batch_id).\
+                filter(signals.batch_id == sys_id).all():
+            setattr(u, signal_target_column, a)
 
     db_session.commit()
     return self.request.id

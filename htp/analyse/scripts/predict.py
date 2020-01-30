@@ -12,7 +12,7 @@ def get_data(ticker, granularity, system, multiplier):
 
     # print(comb)
     for s in comb:
-        for trade in ['buy', 'sell']:
+        for trade in ['buy']:  # , 'sell']:
             tasks.setup_predict.delay(
                 ticker, granularity, s.split(' ')[0], s.split(' ')[1], trade,
                 multiplier)

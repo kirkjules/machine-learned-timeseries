@@ -1,7 +1,7 @@
 """Module for calculating position sizes."""
 
 import copy
-import datetime
+# import datetime
 import functools
 import numpy as np
 import pandas as pd
@@ -425,7 +425,7 @@ def count(trades, ticker, amount, RISK_PERC, trade_type, conv=False):
             STOP=trade[stop])
         profit = profit_loss(
             ticker, ENTRY=trade[entry], EXIT=trade[exit], POS_SIZE=size,
-            CONV=conv_exit, TRADE=trade_type)
+            CONV=trade[conv_exit], TRADE=trade_type)
         AMOUNT += profit
         d_pos_size[trade[entry_dt]] = {
             "POS_SIZE": int(size), "PL_AUD": float(profit), "PL_REALISED":
@@ -565,9 +565,9 @@ def performance_stats(results):
         results[results["PL_AUD"] < 0]["PL_AUD"].mean()
         ).quantize(Decimal("0.01"))
 
-    holding_time = results["exit_datetime"] - results["entry_datetime"]
-    stats["average_holding_time_per_trade"] = str(
-        datetime.timedelta(seconds=holding_time.mean().seconds))
+    # holding_time = results["exit_datetime"] - results["entry_datetime"]
+    # stats["average_holding_time_per_trade"] = str(
+    #     datetime.timedelta(seconds=holding_time.mean().seconds))
 
     cons_loss = 0
     list_cons_loss = []

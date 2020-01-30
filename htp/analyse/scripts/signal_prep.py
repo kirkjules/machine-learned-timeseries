@@ -1,6 +1,7 @@
 from htp.aux.database import db_session
 from htp.analyse.scripts.evaluate import parts
 from htp.aux.tasks import prep_signals, conv_price
+from htp.toolbox.calculator import ticker_conversion_pairs
 from htp.aux.models import getTickerTask, genSignalTask,\
         stochastic, convergence_divergence, ichimoku, relative_strength,\
         momentum
@@ -14,8 +15,13 @@ sup = {'M15': 'H1', 'H1': 'H4'}
 
 def get_data(ticker, granularity, system, multiplier):
     conv = db_session.query(getTickerTask).filter(
-        getTickerTask.ticker == 'AUD_JPY', getTickerTask.granularity == 'H1',
+        getTickerTask.ticker == ticker_conversion_pairs[ticker],
+        getTickerTask.granularity == granularity,
         getTickerTask.price == 'A').first()
+
+    conv_id = conv.id
+    if ticker == ticker_conversion_pairs[ticker]:
+        conv_id = False
 
     entry_target = db_session.query(getTickerTask).filter(
         getTickerTask.ticker == ticker, getTickerTask.granularity ==
@@ -44,9 +50,9 @@ def get_data(ticker, granularity, system, multiplier):
                 ).first()
 
             (conv_price.s(
-                None, 'entry_datetime', 'conv_entry_price', conv.id, sig.id) |
+                None, 'entry_datetime', 'conv_entry_price', conv_id, sig.id) |
                 conv_price.s(
-                    'exit_datetime', 'conv_exit_price', conv.id, sig.id) |
+                    'exit_datetime', 'conv_exit_price', conv_id, sig.id) |
                 prep_signals.s(
                     stochastic, tables[stochastic], entry_target.id, sig.id,
                     'target') |
