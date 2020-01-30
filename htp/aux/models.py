@@ -205,8 +205,6 @@ class signals(Base):
     id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
     batch_id = Column(
         UUID(as_uuid=True), ForeignKey("genSignalTask.id"), unique=False)
-    get_id = Column(
-        UUID(as_uuid=True), ForeignKey("getTickerTask.id"), unique=False)
     entry_datetime = Column(DateTime())
     entry_price = Column(Float(precision=6))
     stop_loss = Column(Float(precision=6))

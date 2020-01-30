@@ -15,7 +15,8 @@ def signals():
     if form.validate_on_submit():
         for interval in form.granularity.data:
             get_data(
-                form.ticker.data, interval, form.system.data)
+                form.ticker.data, interval, form.system.data,
+                form.multiplier.data)
         return redirect(url_for('index.monitor'))
 
     return render_template('signal.html', form=form)

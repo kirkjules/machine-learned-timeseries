@@ -41,6 +41,15 @@
       {% endif %}
     </div>
     {{ form.select_all.label }} {{ form.select_all }}
+    <div class="form-field">{{ form.multiplier.label }} {{ form.multiplier }}
+      {% if form.multiplier.errors %}
+        <ul class="errors">
+	  {% for error in form.multiplier.errors %}
+	    <li>{{ error }}</li>
+	  {% endfor %}
+	</ul>
+      {% endif %}
+    </div>
     {{ form.submit() }}
   </form>
 </div>

@@ -139,11 +139,11 @@ def predict(results_with_properties, training_size, random_search=False):
     except KeyError:
         return None, "NA", all_feat_model_score, select_feat_model_score
 
-    if pred_results[1].sum() < 5:
+    if pred_results[1].sum() < 5:  # increased from 5
         return None, "NA", all_feat_model_score, select_feat_model_score
 
     # This is the important threshold, not the original system win rate.
-    if pred_win_rate < 70.:
+    if pred_win_rate < 70.:  # increased from 70.
         return None, pred_win_rate, all_feat_model_score, \
             select_feat_model_score
 

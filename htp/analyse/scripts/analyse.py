@@ -49,7 +49,8 @@ def get_data(ticker, granularity, target=None):
                       table_momentum, relative_strength, table_stoch]:
             db_session.query(table).filter(table.batch_id == entry.id).delete(
                 synchronize_session=False)
-        db_session.commit()
+
+    db_session.commit()
 
     tasks.set_smooth_moving_average.delay(task_id)
 

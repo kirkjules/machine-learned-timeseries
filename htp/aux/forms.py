@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, \
-    SelectMultipleField, DateTimeField
+    SelectMultipleField, DateTimeField, SelectField
 from wtforms.validators import DataRequired, Optional
 
 
@@ -49,6 +49,8 @@ class SignalForm(FlaskForm):
             ('6', '6'), ('7', '7'), ('8', '8'), ('9', '9'), ('10', '10')],
         render_kw={"class_": "chosen-select"})
     select_all = BooleanField(validators=[Optional()])
+    multiplier = SelectField('Stop loss ATR delta multiplier', choices=[
+        ('3', '3'), ('4', '4'), ('5', '5'), ('6', '6')])
     submit = SubmitField('Submit')
 
     def validate(self):

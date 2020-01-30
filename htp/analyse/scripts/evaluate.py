@@ -17,7 +17,7 @@ systems = [f"close_sma_{i} close_sma_{j}" for i in periods for j in periods
 parts = list(split(systems, 10))
 
 
-def get_data(ticker, granularity, system):
+def get_data(ticker, granularity, system, multiplier):
     """Function that enqueues system signals generators in celery to be managed
     by a rabbitmq broker.
 
@@ -56,4 +56,4 @@ def get_data(ticker, granularity, system):
         for trade in ['buy', 'sell']:
             tasks.gen_signals.delay(
                 mid.id, ask.id, bid.id, s.split(' ')[0], s.split(' ')[1],
-                trade, multiplier=6.0)
+                trade, multiplier=int(multiplier))

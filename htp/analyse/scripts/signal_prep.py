@@ -12,7 +12,7 @@ tables = {stochastic: ['percK', 'percD'], ichimoku: ['iky_cat'],
 sup = {'M15': 'H1', 'H1': 'H4'}
 
 
-def get_data(ticker, granularity, system):
+def get_data(ticker, granularity, system, multiplier):
     conv = db_session.query(getTickerTask).filter(
         getTickerTask.ticker == 'AUD_JPY', getTickerTask.granularity == 'H1',
         getTickerTask.price == 'A').first()
@@ -39,10 +39,12 @@ def get_data(ticker, granularity, system):
                 genSignalTask.batch_id == entry_target.id,
                 genSignalTask.fast == s.split(' ')[0],  # 'close_sma_3',
                 genSignalTask.slow == s.split(' ')[1],  # 'close_sma_5',
-                genSignalTask.trade_direction == trade).first()
+                genSignalTask.trade_direction == trade,
+                genSignalTask.exit_strategy == f'trailing_atr_{multiplier}'
+                ).first()
 
             (conv_price.s(
-                True, 'entry_datetime', 'conv_entry_price', conv.id, sig.id) |
+                None, 'entry_datetime', 'conv_entry_price', conv.id, sig.id) |
                 conv_price.s(
                     'exit_datetime', 'conv_exit_price', conv.id, sig.id) |
                 prep_signals.s(

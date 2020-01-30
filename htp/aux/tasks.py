@@ -1,5 +1,3 @@
-# import os
-# import sys
 import requests
 import numpy as np
 import pandas as pd
@@ -9,7 +7,6 @@ from htp.api import Api
 from copy import deepcopy
 from celery import Task
 from celery.result import AsyncResult
-# from datetime import datetime
 from htp.api.oanda import Candles
 from htp.toolbox import calculator
 from sqlalchemy import select, MetaData, Table
@@ -212,17 +209,20 @@ def gen_signals(mid_id, ask_id, bid_id, fast, slow, trade, multiplier=6.0):
         obs_shift, how='left', left_on='entry_datetime', right_index=True,
         validate='1:1')
 
-    sys_signals['get_id'] = mid_id
+    sys_signals.dropna(inplace=True)
+    sys_signals.drop(
+        sys_signals[sys_signals['stop_loss'] <= 0].index, inplace=True)
 
     sys_entry = db_session.query(genSignalTask).filter(
         genSignalTask.batch_id == mid_id, genSignalTask.fast == fast,
         genSignalTask.slow == slow, genSignalTask.trade_direction == trade,
-        genSignalTask.exit_strategy == 'trailing_atr_6').first()
+        genSignalTask.exit_strategy == f'trailing_atr_{multiplier}').first()
     if sys_entry is None:
         sys_id = uuid4()
         db_session.add(genSignalTask(
             id=sys_id, batch_id=mid_id, fast=fast, slow=slow,
-            trade_direction=trade, exit_strategy='trailing_atr_6'))
+            trade_direction=trade, exit_strategy=f'trailing_atr_{multiplier}',
+            signal_count=len(sys_signals)))
     else:
         sys_id = sys_entry.id
         setattr(signals, 'status', 0)
@@ -232,67 +232,61 @@ def gen_signals(mid_id, ask_id, bid_id, fast, slow, trade, multiplier=6.0):
     save_data(sys_signals, signals, genSignalTask, ('status',), sys_id)
 
 
-@celery.task()
-def prep_signals(check, table, targets, batch_id, sys_id, property_type):
+@celery.task(bind=True)
+def prep_signals(self, prev_id, table, targets, batch_id, sys_id,
+                 property_type):
+
+    if prev_id is not None:
+        AsyncResult(prev_id).forget()
+
     for s, d in db_session.query(signals, table).\
-                join(table, signals.entry_datetime == table.timestamp_shift).\
-                filter(table.batch_id == batch_id).\
-                filter(signals.batch_id == sys_id).all():
+            join(table, signals.entry_datetime == table.timestamp_shift).\
+            filter(table.batch_id == batch_id).\
+            filter(signals.batch_id == sys_id).all():
         for target in targets:
             setattr(s, f'{property_type}_{target}', getattr(d, target))
 
     db_session.commit()
-    return True
+    return self.request.id
 
 
-@celery.task()
-def conv_price(check, signal_join_column, signal_target_column, conv_batch_id,
-               sys_id):
-    # update conv exit price
+@celery.task(bind=True)
+def conv_price(self, prev_id, signal_join_column, signal_target_column,
+               conv_batch_id, sys_id):
+
+    if prev_id is not None:
+        AsyncResult(prev_id).forget()
+
     for u, a in db_session.query(signals, candles.open).\
-                join(candles, getattr(signals, signal_join_column) ==
-                     candles.timestamp).\
-                filter(candles.batch_id == conv_batch_id).\
-                filter(signals.batch_id == sys_id).all():
+            join(candles, getattr(signals, signal_join_column) ==
+                 candles.timestamp).\
+            filter(candles.batch_id == conv_batch_id).\
+            filter(signals.batch_id == sys_id).all():
         setattr(u, signal_target_column, a)
 
     db_session.commit()
-    return True
+    return self.request.id
 
 
 @celery.task(ignore_result=True)
-def setup_predict(ticker, granularity, fast, slow, direction):
+def setup_predict(ticker, granularity, fast, slow, direction, multiplier):
     entry = db_session.query(getTickerTask).filter(
         getTickerTask.ticker == ticker, getTickerTask.granularity ==
         granularity, getTickerTask.price == 'M').first()
 
     sys = db_session.query(genSignalTask).filter(
         genSignalTask.batch_id == entry.id, genSignalTask.fast == fast,
-        genSignalTask.slow == slow, genSignalTask.trade_direction == direction
-        ).first()
+        genSignalTask.slow == slow, genSignalTask.trade_direction == direction,
+        genSignalTask.exit_strategy == f'trailing_atr_{multiplier}').first()
 
     db_session.query(trade_results).filter(
         trade_results.batch_id == sys.id).delete(synchronize_session=False)
 
-    sys_data = load_data(
-        sys.id, 'signals',
-        ['entry_datetime', 'entry_price', 'stop_loss', 'exit_datetime',
-         'exit_price', 'conv_entry_price', 'conv_exit_price', 'target_percK',
-         'target_percD', 'target_macd', 'target_signal', 'target_histogram',
-         'target_rsi', 'target_adx', 'target_iky_cat', 'sup_percK',
-         'sup_percD', 'sup_macd', 'sup_signal', 'sup_histogram', 'sup_rsi',
-         'sup_adx', 'sup_iky_cat', 'close_in_atr', 'close_to_fast_by_atr',
-         'close_to_slow_by_atr'], index_col='entry_datetime', dates_cols=[
-             'entry_datetime', 'exit_datetime'])
-
     db_session.commit()
-
-    sys_data.dropna(inplace=True)
-    sys_data.drop(sys_data[sys_data['stop_loss'] <= 0].index, inplace=True)
 
     train_sample_size = 500
     test_sample_size = 50
-    num_chunks = ((len(sys_data) - train_sample_size - test_sample_size) /
+    num_chunks = ((sys.signal_count - train_sample_size - test_sample_size) /
                   test_sample_size) + 2
     chunks = []
     for ind in range(int(num_chunks)):
@@ -317,15 +311,18 @@ def action_predict(sys_id, chunk, ticker, direction, train_sample_size):
          'close_to_slow_by_atr'], index_col='entry_datetime', dates_cols=[
              'entry_datetime', 'exit_datetime'])
 
-    sys_data.dropna(inplace=True)
-    sys_data.drop(sys_data[sys_data['stop_loss'] <= 0].index, inplace=True)
+    for col in ['conv_entry_price', 'conv_exit_price']:
+        sys_data[col].fillna(method='ffill', inplace=True)
+        sys_data[col].fillna(method='bfill', inplace=True)
+
+    sys_data.fillna(0, inplace=True)
     sys_data.reset_index(inplace=True)
     data = sys_data.iloc[chunk[0]:chunk[1]].copy()
 
     results = calculator.count(
         data, ticker, 1000, 0.01, direction, conv=True)
     performance = calculator.performance_stats(results[0:train_sample_size])
-    if performance['win_%'] < 20.:
+    if performance['win_%'] < 20.:  # increased from 20.
         return None
 
     results["win_loss"] = np.where(results["PL_AUD"] > 0, 1, 0)

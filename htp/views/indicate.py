@@ -16,6 +16,8 @@ def indicators():
         for interval in form.granularity.data:
             if interval == 'H4':
                 get_data(form.ticker.data, interval, target='H1')
+            elif interval == 'H1':
+                get_data(form.ticker.data, interval, target='M15')
             else:
                 get_data(form.ticker.data, interval)
         return redirect(url_for('index.monitor'))
