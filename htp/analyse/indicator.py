@@ -5,8 +5,105 @@ DataFrame format.
 
 import numpy as np
 import pandas as pd
-# from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_EVEN
 from htp.analyse.evaluate import iky_cat
+
+
+def numpy_to_object_array(array, exp):
+    """Convert float elements in a numpy 1d array to string objects via decimal
+    e.g. ti_sma = numpy_to_object_array(ti_sma, '0.001')"""
+    arr = []
+    for element in array:
+        dec = Decimal(element).quantize(Decimal(exp), rounding=ROUND_HALF_EVEN)
+        arr.append(str(dec))
+
+    return np.asarray(arr, dtype='object')
+
+
+class Indicate:
+    def __init__(self, data=None, labels=[], orient='rows'):
+        """Base class to validate data and pre-process before computing
+        indicator values.
+
+        Parameters
+        ----------
+        data : None, list, numpy.ndarray, pandas.core.series.Series,
+        pandas.core.frame.DataFrame
+            Ticker timeseries data provided in a format that is interpolated
+            into a numpy ndarray with shape length of index by number of
+            columns. Maximum five columns will be recognised if sufficient
+            labels are provided.
+
+        labels : list
+            A list of strings that define what each column's data represent.
+            Common definitions are timestamp, open, high, low, and close.
+
+        orient : str {'rows', 'columns'}
+            Optional argument to orient numpy array for processing. Logic has
+            not been written to handle incorrect orientation.
+
+        Attributes
+        ----------
+        data : dict
+            A dictionary of arrays indexed by label items or column names.
+        """
+        self.data = {}
+
+        if data is None:
+            raise ValueError('No data was parsed')
+
+        elif isinstance(data, list):
+            item_length = None
+            # compare items in list
+            for item in data:
+                if not isinstance(item, list):
+                    raise TypeError('Each item in the list must a be a list \
+itself, defined by a string at the same index in labels.')
+                elif item_length is not None and item_length != len(item):
+                    raise ValueError('Each item in the list must be equal in \
+length.')
+                else:
+                    item_length = len(item)
+            if len(data) != len(labels):
+                raise ValueError('Unequal label to column ratio.')
+            elif len(data) == 1:
+                self.data[labels[0]] = np.asarray(data[0])
+            else:
+                for ind in range(len(data)):
+                    self.data[labels[ind]] = np.asarray(data[ind])
+
+        elif isinstance(data, np.ndarray):  # map out each ndarray shape to be
+            # accepted.
+            if orient == 'rows':
+                if data.shape[1] != len(labels):
+                    raise ValueError('Unequal label to column ratio.')
+                else:
+                    columns = np.split(data,  data.shape[1], axis=1)
+                    for ind in range(len(columns)):
+                        self.data[labels[ind]] = np.concatenate(columns[ind])
+            elif orient == 'columns':
+                if data.shape[0] != len(labels):
+                    raise ValueError('Unequal label to column ratio.')
+                else:
+                    for ind in range(len(data)):
+                        self.data[labels[ind]] = data[ind]
+
+        elif isinstance(data, pd.core.series.Series):
+            if not labels and data.name is None:
+                raise ValueError('No label available to describe data, add \
+name to Series or to labels list variable')
+            elif len(labels) > 1 and data.name is None:
+                raise ValueError('Too many items in labels, only provide one \
+item with Series data.')
+            elif len(labels) == 1:
+                self.data[labels[0]] = data.to_numpy()
+            elif not labels:
+                self.data[data.name] = data.to_numpy()
+
+        elif isinstance(data, pd.core.frame.DataFrame):
+            columns = np.split(data.to_numpy(), len(data.columns), axis=1)
+            for ind in range(len(columns)):
+                self.data[data.columns[ind]] = np.concatenate(columns[ind])
 
 
 def smooth_moving_average(df1, df2=None, column="close", period=10,

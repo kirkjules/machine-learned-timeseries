@@ -133,8 +133,7 @@ class Candles(Api):
         price = {"M": "mid", "A": "ask", "B": "bid"}
         cols = {"o": "open", "h": "high", "l": "low", "c": "close"}
         for i in range(len(r["candles"])):
-            dic[r["candles"][i]["time"]] =\
-                r["candles"][i][price[params["price"]]]
+            dic[r["candles"][i]["time"]] = r["candles"][i][price[params]]
         data = pd.DataFrame.from_dict(
             dic, orient="index").rename(columns=cols)
         data.set_index(

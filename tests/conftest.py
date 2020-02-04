@@ -1,5 +1,5 @@
 import pytest
-import pandas as pd
+from htp.api import oanda
 
 
 @pytest.fixture
@@ -8,8 +8,12 @@ def number():
 
 
 @pytest.fixture
-def setup():
-    with pd.HDFStore("data/EUR_USD/M15/price.h5") as store:
-        data = store["M"]
+def df():
+    """Generate test candle data to use as a standard fixture."""
 
-    return data
+    def _get(ticker, queryParameters):
+        return oanda.Candles.to_df(
+            oanda.Candles(instrument=ticker, queryParameters=queryParameters
+                          ).r.json(), queryParameters['price'])
+
+    return _get
