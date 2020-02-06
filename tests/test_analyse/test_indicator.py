@@ -20,7 +20,7 @@ def test_sma_method(data):
     """Compare indicator.sma function to Tulipy library."""
     arr = data["close"].to_numpy(copy=True).astype(float)
     ti_sma = np.append([np.nan for i in range(9)], ti.sma(arr, period=10))
-    pd_sma = pd.Series(arr).rolling(10).mean()
+    pd_sma = pd.Series(arr).rolling(10).mean().to_numpy()
     assert np.allclose(ti_sma, pd_sma, equal_nan=True)
 
 

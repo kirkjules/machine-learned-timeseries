@@ -46,6 +46,23 @@ class Indicate:
         ----------
         data : dict
             A dictionary of arrays indexed by label items or column names.
+
+        Examples
+        --------
+        >>> df = pd.DataFrame({
+            'timestamp': array([Timestamp('2020-01-29 17:30:00'),
+                                Timestamp('2020-01-29 17:45:00')],
+                               dtype=object),
+            'open': array(['73.632', '73.641'], dtype=object),
+            'high': array(['73.642', '73.670'], dtype=object),
+            'low': array(['73.628', '73.640'], dtype=object),
+            'close': array(['73.641', '73.654'], dtype=object)})
+        >>> Indicate(df).data
+        {'timestamp': array([Timestamp('2020-01-29 17:30:00'),
+ Timestamp('2020-01-29 17:45:00')],    dtype=object), 'open': array(['73.632',
+ '73.641'], dtype=object), 'high': array(['73.642', '73.670'], dtype=object),
+ 'low': array(['73.628', '73.640'], dtype=object), 'close': array(['73.641',
+ '73.654'], dtype=object)}
         """
         self.data = {}
 
@@ -105,64 +122,31 @@ item with Series data.')
             for ind in range(len(columns)):
                 self.data[data.columns[ind]] = np.concatenate(columns[ind])
 
+    def smooth_moving_average(self, label='close', period=10):
+        """
+        A function to calculate the rolling mean on a given dataframe column.
 
-def smooth_moving_average(df1, df2=None, column="close", period=10,
-                          concat=False):
-    """
-    A function to calculate the rolling mean on a given dataframe column.
+        Parameters
+        ----------
+        label : str
+            The dictionary key in data that point to which array the rolling
+            mean is calculated.
+        period : int
+            The number of periods that contribute to the mean.
 
-    Parameters
-    ----------
-    df1 : pandas.core.frame.DataFrame
-        A dataframe containing a column label matching the `column` keyword
-        variable.
-    df2 : pandas.core.frame.DataFrame
-        An optional second dataframe on which to concatenate the generated
-        rolling mean dataframe. Used when an existing indicator dataframe has
-        been created. Both dataframe should posess the same index.
-    column : str
-        The column name in df1 on which to calculate the rolling mean.
-    period : int
-        The number of periods that contribute to the mean.
-    concat : bool
-        If the generated rolling mean result should be concatenated to the
-        specified (`df2`) dataframe.
+        Returns
+        -------
+        dict
+            A dataframe with either the index of df1 and a single column
+            containing the calculated rolling mean.
 
-    Returns
-    -------
-    pandas.core.frame.DataFrame
-        A dataframe with either the index of df1 and a single column containing
-        the calculated rolling mean.
-        Or, the above, concatenated to the specified dataframe `df2`.
+        Examples
+        --------
+        """
+        sma = pd.Series(
+            self.data[label]).astype(float).rolling(period).mean().to_numpy()
 
-    Examples
-    --------
-    >>> import pandas as pd
-    >>> with pd.HDFStore("data/AUD_JPY_M15.h5") as store:
-    ...     data = store["data_mid"]
-    >>> avgs = []
-    >>> for i in [3, 6, 12, 24]:
-    ...     avg = smooth_moving_average(data, column="close", period=i)
-    ...     avgs.append(avg)
-    >>> pd.set_option("display.max_columns", 6)
-    >>> pd.concat(avgs, axis=1).tail()
-                         close_sma_3  close_sma_6  close_sma_12  close_sma_24
-    timestamp
-    2019-08-20 19:45:00       72.009       72.023        72.034        72.062
-    2019-08-20 20:00:00       71.999       72.017        72.030        72.057
-    2019-08-20 20:15:00       72.001       72.015        72.026        72.052
-    2019-08-20 20:30:00       71.998       72.004        72.019        72.047
-    2019-08-20 20:45:00       71.997       71.998        72.016        72.043
-    """
-    # rn = abs(Decimal(str(df1.iloc[0, 3])).as_tuple().exponent)
-    sma = df1[column].rolling(period).mean().round(6).to_frame(
-        name="{}_sma_{}".format(column, period))
-
-    if concat:
-        out = pd.concat([sma, df2], axis=1)
-        return out
-
-    return sma.round(6)
+        return sma
 
 
 def ichimoku_kinko_hyo(data, conv=9, base=26, lead=52):
