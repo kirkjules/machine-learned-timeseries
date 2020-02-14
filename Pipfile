@@ -9,6 +9,7 @@ ipython = "*"
 tulipy = "*"
 memory-profiler = "*"
 htp = {editable = true,path = "."}
+pytest-mock = "*"
 
 [packages]
 requests = "*"
@@ -28,6 +29,7 @@ flask-login = "*"
 sqlalchemy = "*"
 psycopg2-binary = "*"
 alembic = "*"
+bokeh = "*"
 
 [requires]
 python_version = "3.7"

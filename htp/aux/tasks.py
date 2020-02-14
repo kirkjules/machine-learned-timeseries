@@ -7,13 +7,13 @@ from htp.api import Api
 from copy import deepcopy
 from celery import Task
 from celery.result import AsyncResult
-from htp.api.oanda import Candles
+from htp.api import oanda
 from htp.toolbox import calculator
 from sqlalchemy import select, MetaData, Table
 from htp.aux.database import db_session, engine
 from htp.analyse import indicator, evaluate_fast, observe, machine_learn
-from htp.aux.models import getTickerTask, subTickerTask, indicatorTask,\
-        genSignalTask, candles, moving_average, signals, trade_results
+from htp.aux.models import GetTickerTask, SubTickerTask, IndicatorTask,\
+        GenSignalTask, Candles, moving_average, Signals, Results
 
 
 class SessionTask(Task, Api):
@@ -33,8 +33,8 @@ class SessionTask(Task, Api):
 
 
 @celery.task(base=SessionTask, bind=True)
-def session_get_data(
-  self, ticker, params={"count": 5, "price": "M"}, timeout=None, db=False):
+def session_get_data(self, ticker, params={"count": 5, "price": "M"},
+                     timeout=None):
     """Celery task function to engage Oanda instruments.Candles endpoint.
 
     Paramaters
@@ -47,14 +47,12 @@ def session_get_data(
     timeout : float {None}
         Set timeout value for production server code so that function doesn't
         block.
-    db : boolean
-        Flag to indicate if function progress to be tracked in the database.
 
     Returns
     -------
     str
         String containing an error's traceback message.
-    dict
+    pandas.core.frame.DataFrame
         The ticker's timeseries data returned by the api endpoint.
     """
     res = None
@@ -69,18 +67,17 @@ def session_get_data(
         if r.status_code != requests.codes.ok:
             res = str(r.json()["errorMessage"])
         else:
-            res = Candles.to_df(r.json(), params)
+            res = oanda.Candles.to_df(r.json(), params)
     finally:
-        if db:
-            entry = db_session.query(subTickerTask).get(UUID(self.request.id))
-            if isinstance(res, str):
-                entry.status = 0
-                entry.error = res
-            else:
-                entry.status = 1
-            db_session.commit()
-            db_session.remove()
-        return (res, params["price"], params["granularity"], self.request.id)
+        entry = db_session.query(SubTickerTask).get(UUID(self.request.id))
+        if isinstance(res, str):
+            entry.status = 0
+            entry.error = res
+        else:
+            entry.status = 1
+        db_session.commit()
+        db_session.remove()
+    return (res, self.request.id)
 
 
 @celery.task(ignore_result=True)
@@ -88,37 +85,19 @@ def merge_data(results, ticker, price, granularity, task_id=None):
     """Sort ticker data in chunks to designated lists matching the same ticker,
     price and granularity to be respectively concetenated and bulk inserted
     into the database."""
-    d = {}
-    for val in price:
-        for interval in granularity:
-            d[f"{interval}/{val}"] = []
-
+    dfs = []
     for result in results:
         if not isinstance(result[0], str):
-            d[f"{result[2]}/{result[1]}"].append(deepcopy(result[0]))
+            dfs.append(deepcopy(result[0]))
         AsyncResult(result[3]).forget()
 
-    for k in d.keys():
-        if len(d[k]) > 0:
-            df = pd.concat(d[k])
-            df = df.loc[~df.index.duplicated(keep='first')]
-            df.sort_index(inplace=True)
-            df.reset_index(inplace=True)
-            df.rename(columns={'index': 'timestamp'}, inplace=True)
-            save_data(df, candles, getTickerTask, ('status',), task_id[f'{k}'])
-
-
-def load_data(task_id, model, columns, index_col='timestamp',
-              dates_cols=['timestamp']):
-    _id = str(task_id)
-    metadata = MetaData(bind=None)
-    table = Table(model, metadata, autoload=True, autoload_with=engine)
-    stmt = select([getattr(table.c, col) for col in columns]).where(
-        table.columns.batch_id == _id)
-    df = pd.read_sql(stmt, engine, index_col=index_col, parse_dates=dates_cols,
-                     columns=columns)
-    df.sort_index(inplace=True)
-    return df
+    if len(dfs) > 0:
+        df = pd.concat(dfs)
+        df = df.loc[~df.index.duplicated(keep='first')]
+        df.sort_index(inplace=True)
+        df.reset_index(inplace=True)
+        df.rename(columns={'index': 'timestamp'}, inplace=True)
+        save_data(df, Candles, GetTickerTask, ('status',), task_id)
 
 
 def save_data(df, data_table, record_table, record_columns, task_id):
@@ -134,6 +113,19 @@ def save_data(df, data_table, record_table, record_columns, task_id):
         setattr(entry, col, 1)
     db_session.commit()
     db_session.remove()
+
+
+def load_data(task_id, model, columns, index_col='timestamp',
+              dates_cols=['timestamp']):
+    _id = str(task_id)
+    metadata = MetaData(bind=None)
+    table = Table(model, metadata, autoload=True, autoload_with=engine)
+    stmt = select([getattr(table.c, col) for col in columns]).where(
+        table.columns.batch_id == _id)
+    df = pd.read_sql(stmt, engine, index_col=index_col, parse_dates=dates_cols,
+                     columns=columns)
+    df.sort_index(inplace=True)
+    return df
 
 
 @celery.task(ignore_result=True)
@@ -156,7 +148,7 @@ def set_indicator(task_id, func, table, task_cols, target=None, shift=-1):
     df_merge['timestamp_shift'] = df_merge['timestamp'].shift(shift)
     df_merge.dropna(subset=['timestamp_shift'], axis=0, inplace=True)
 
-    save_data(df_merge, table, indicatorTask, task_cols,  task_id)
+    save_data(df_merge, table, IndicatorTask, task_cols,  task_id)
 
 
 @celery.task(ignore_result=True)
@@ -173,7 +165,7 @@ def set_smooth_moving_average(task_id):
 
     r = pd.concat(avgs, axis=1)
     r.reset_index(inplace=True)
-    save_data(r, moving_average, indicatorTask, ('sma_status',), task_id)
+    save_data(r, moving_average, IndicatorTask, ('sma_status',), task_id)
 
 
 @celery.task(ignore_result=True)
@@ -213,23 +205,23 @@ def gen_signals(mid_id, ask_id, bid_id, fast, slow, trade, multiplier=6.0):
     sys_signals.drop(
         sys_signals[sys_signals['stop_loss'] <= 0].index, inplace=True)
 
-    sys_entry = db_session.query(genSignalTask).filter(
-        genSignalTask.batch_id == mid_id, genSignalTask.fast == fast,
-        genSignalTask.slow == slow, genSignalTask.trade_direction == trade,
-        genSignalTask.exit_strategy == f'trailing_atr_{multiplier}').first()
+    sys_entry = db_session.query(GenSignalTask).filter(
+        GenSignalTask.batch_id == mid_id, GenSignalTask.fast == fast,
+        GenSignalTask.slow == slow, GenSignalTask.trade_direction == trade,
+        GenSignalTask.exit_strategy == f'trailing_atr_{multiplier}').first()
     if sys_entry is None:
         sys_id = uuid4()
-        db_session.add(genSignalTask(
+        db_session.add(GenSignalTask(
             id=sys_id, batch_id=mid_id, fast=fast, slow=slow,
             trade_direction=trade, exit_strategy=f'trailing_atr_{multiplier}',
             signal_count=len(sys_signals)))
     else:
         sys_id = sys_entry.id
-        setattr(signals, 'status', 0)
-        db_session.query(signals).filter(signals.batch_id == sys_id).delete(
+        setattr(Signals, 'status', 0)
+        db_session.query(Signals).filter(Signals.batch_id == sys_id).delete(
             synchronize_session=False)
     db_session.commit()
-    save_data(sys_signals, signals, genSignalTask, ('status',), sys_id)
+    save_data(sys_signals, Signals, GenSignalTask, ('status',), sys_id)
 
 
 @celery.task(bind=True)
@@ -239,10 +231,10 @@ def prep_signals(self, prev_id, table, targets, batch_id, sys_id,
     if prev_id is not None:
         AsyncResult(prev_id).forget()
 
-    for s, d in db_session.query(signals, table).\
-            join(table, signals.entry_datetime == table.timestamp_shift).\
+    for s, d in db_session.query(Signals, table).\
+            join(table, Signals.entry_datetime == table.timestamp_shift).\
             filter(table.batch_id == batch_id).\
-            filter(signals.batch_id == sys_id).all():
+            filter(Signals.batch_id == sys_id).all():
         for target in targets:
             setattr(s, f'{property_type}_{target}', getattr(d, target))
 
@@ -258,18 +250,18 @@ def conv_price(self, prev_id, signal_join_column, signal_target_column,
         AsyncResult(prev_id).forget()
 
     if not conv_batch_id:
-        for r in db_session.query(signals).\
-                 filter(signals.batch_id == sys_id).all():
+        for r in db_session.query(Signals).\
+                 filter(Signals.batch_id == sys_id).all():
             if signal_target_column == 'conv_entry_price':
                 r.conv_entry_price = r.entry_price
             elif signal_target_column == 'conv_exit_price':
                 r.conv_exit_price = r.exit_price
     else:
-        for u, a in db_session.query(signals, candles.open).\
-                join(candles, getattr(signals, signal_join_column) ==
-                     candles.timestamp).\
-                filter(candles.batch_id == conv_batch_id).\
-                filter(signals.batch_id == sys_id).all():
+        for u, a in db_session.query(Signals, Candles.open).\
+                join(Candles, getattr(Signals, signal_join_column) ==
+                     Candles.timestamp).\
+                filter(Candles.batch_id == conv_batch_id).\
+                filter(Signals.batch_id == sys_id).all():
             setattr(u, signal_target_column, a)
 
     db_session.commit()
@@ -278,17 +270,17 @@ def conv_price(self, prev_id, signal_join_column, signal_target_column,
 
 @celery.task(ignore_result=True)
 def setup_predict(ticker, granularity, fast, slow, direction, multiplier):
-    entry = db_session.query(getTickerTask).filter(
-        getTickerTask.ticker == ticker, getTickerTask.granularity ==
-        granularity, getTickerTask.price == 'M').first()
+    entry = db_session.query(GetTickerTask).filter(
+        GetTickerTask.ticker == ticker, GetTickerTask.granularity ==
+        granularity, GetTickerTask.price == 'M').first()
 
-    sys = db_session.query(genSignalTask).filter(
-        genSignalTask.batch_id == entry.id, genSignalTask.fast == fast,
-        genSignalTask.slow == slow, genSignalTask.trade_direction == direction,
-        genSignalTask.exit_strategy == f'trailing_atr_{multiplier}').first()
+    sys = db_session.query(GenSignalTask).filter(
+        GenSignalTask.batch_id == entry.id, GenSignalTask.fast == fast,
+        GenSignalTask.slow == slow, GenSignalTask.trade_direction == direction,
+        GenSignalTask.exit_strategy == f'trailing_atr_{multiplier}').first()
 
-    db_session.query(trade_results).filter(
-        trade_results.batch_id == sys.id).delete(synchronize_session=False)
+    db_session.query(Results).filter(
+        Results.batch_id == sys.id).delete(synchronize_session=False)
 
     db_session.commit()
 
@@ -358,7 +350,7 @@ def action_predict(sys_id, chunk, ticker, direction, train_sample_size):
             'PL_REALISED']].copy()
 
         rows = upload.to_dict('records')
-        db_session.bulk_insert_mappings(trade_results, rows)
+        db_session.bulk_insert_mappings(Results, rows)
         db_session.commit()
         db_session.close()
 

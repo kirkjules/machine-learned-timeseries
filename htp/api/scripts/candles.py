@@ -1,11 +1,13 @@
 import click
 from celery import chord
 from copy import deepcopy
-from uuid import uuid4, UUID
+from uuid import uuid4  # , UUID
 from htp.toolbox import dates
 from htp.aux import tasks
+from datetime import datetime
 from htp.aux.database import db_session
-from htp.aux.models import getTickerTask, subTickerTask, candles
+from htp.aux.models import GetTickerTask, SubTickerTask, Candles, Indicators,\
+    IndicatorTask
 
 
 # imported celery app for chord to recognise backend.
@@ -31,7 +33,7 @@ def arg_prep(queryParameters):
     return date_list
 
 
-def get_data(ticker, price, granularity, from_, to, smooth, db=True):
+def get_data(ticker, price, granularity, from_, to, smooth):
     """Function to initiate ticker data download and entry logging in a
     database.
 
@@ -52,8 +54,6 @@ def get_data(ticker, price, granularity, from_, to, smooth, db=True):
     smooth : bool
        A flag that the api endpoint accepts to ensure the close and open
        values for adjacent candles match.
-    db : bool
-       A flag to ensure the query is logged in the database.
 
     Returns
     -------
@@ -69,52 +69,49 @@ def get_data(ticker, price, granularity, from_, to, smooth, db=True):
     rows that match the same ticker, price and granularity criteris, updating
     the from_ and to values accordingly.
     """
-    _ids = {}
-    header = []
     for val in price:
         for interval in granularity:
 
             args = {"price": val, "granularity": interval, "from": from_,
                     "to": to, "smooth": smooth}
 
-            _ids[f"{interval}/{val}"] = None
-            if db:
-                entry = db_session.query(getTickerTask).filter(
-                    getTickerTask.ticker == ticker, getTickerTask.price ==
-                    val, getTickerTask.granularity == interval).first()
-                if entry is None:
-                    _ids[f"{interval}/{val}"] = uuid4()
-                    db_session.add(getTickerTask(
-                        id=_ids[f"{interval}/{val}"], ticker=ticker, price=val,
-                        granularity=interval, _from=from_, to=to))
-                else:
-                    _ids[f"{interval}/{val}"] = entry.id
-                    setattr(entry, "_from", from_)
-                    setattr(entry, "to", to)
-                    db_session.query(subTickerTask).filter(
-                        subTickerTask.get_id == entry.id).delete(
-                            synchronize_session=False)
-                    db_session.query(candles).filter(
-                        candles.batch_id == entry.id).delete(
-                            synchronize_session=False)
+            entry = db_session.query(GetTickerTask).filter(
+                GetTickerTask.ticker == ticker, GetTickerTask.price == val,
+                GetTickerTask.granularity == interval).first()
+            if entry is None:
+                batch_id = uuid4()
+                db_session.add(GetTickerTask(
+                    id=batch_id, ticker=ticker, price=val, _from=from_, to=to,
+                    granularity=interval))
+            else:
+                batch_id = entry.id
+                setattr(entry, "_from", from_)
+                setattr(entry, "to", to)
+                for table in [SubTickerTask, Candles, IndicatorTask,
+                              Indicators]:
+                    db_session.query(table).filter(table.batch_id == entry.id)\
+                        .delete(synchronize_session=False)
 
+            header = []
             param_set = arg_prep(args)
             for params in param_set:
                 g = tasks.session_get_data.signature(
-                    (ticker,), {"params": params, "timeout": 30, "db": db})
+                    (ticker,), {"params": params, "timeout": 30})
                 g.freeze()
                 # print(g.id)
                 header.append(g)
-                if db:
-                    db_session.add(subTickerTask(
-                        id=UUID(g.id), get_id=_ids[f"{interval}/{val}"],
-                        _from=params["from"], to=params["to"]))
+                db_session.add(SubTickerTask(  # id=UUID(g.id),
+                    batch_id=batch_id,
+                    _from=datetime.strptime(
+                        params["from"], '%Y-%m-%dT%H:%M:%S.%f000Z'),
+                    to=datetime.strptime(
+                        params["from"], '%Y-%m-%dT%H:%M:%S.%f000Z')))
 
-    if db:
-        db_session.commit()
+            callback = tasks.merge_data.s(
+                ticker, price, granularity, task_id=batch_id)
+            chord(header)(callback)
 
-    callback = tasks.merge_data.s(ticker, price, granularity, task_id=_ids)
-    return chord(header)(callback)
+    db_session.commit()
 
 
 @click.command()
@@ -126,8 +123,7 @@ def get_data(ticker, price, granularity, from_, to, smooth, db=True):
 @click.option("--to", default=None, type=click.DateTime(formats=None))
 @click.option("--smooth", default=False, type=click.BOOL)
 def cli_get_data(ticker, price, granularity, from_, to, smooth):
-    return get_data(
-        ticker, price, granularity, from_, to, smooth, db=False).get()
+    return get_data(ticker, price, granularity, from_, to, smooth).get()
 
 
 if __name__ == "__main__":

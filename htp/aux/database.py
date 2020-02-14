@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
-engine = create_engine(os.environ['DATABASE'], convert_unicode=True)
+engine = create_engine(os.environ['DATABASE'])  # , convert_unicode=True)
 
 # configured factory that creates new Session objects when called
 session_factory = sessionmaker(

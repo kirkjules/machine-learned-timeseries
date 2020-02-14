@@ -3,46 +3,10 @@ import numpy as np
 import pandas as pd
 from uuid import uuid4
 # from htp.api import oanda
+from htp.analyse import indicator
 from datetime import datetime as d
-from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker
-from htp.aux.database import Base, init_db
-from htp.aux.models import User, GetTickerTask, SubTickerTask, Candles
-
-
-# fixture functions for db testing
-@pytest.fixture(scope='class')
-def engine():
-    """Create a test db that can be used with app functionality."""
-    return create_engine('sqlite://', echo=False)
-
-
-@pytest.fixture(scope='class')
-def tables(engine):
-    """Generate all tables in htp.aux.models in SQLite testing DB."""
-    init_db(engine)
-    yield
-    Base.metadata.drop_all(engine)
-
-
-@pytest.fixture(scope='class')
-def dbsession(engine, tables):
-    """Returns an sqlalchemy session, and after the test tears down
-    everything properly."""
-    connection = engine.connect()
-    # begin the nested transaction
-    transaction = connection.begin()
-    # use the connection with the already started transaction
-    session_factory = sessionmaker(bind=connection)
-    session = scoped_session(session_factory)
-
-    yield session
-
-    session.remove()
-    # roll back the broader transaction
-    transaction.rollback()
-    # put back the connection to the connection pool
-    connection.close()
+from htp.aux.models import User, GetTickerTask, SubTickerTask, Candles,\
+    Indicators
 
 
 def test_get_task_sub_task_relationship():  # dbsession):
@@ -70,15 +34,15 @@ def test_task_to_data_relationship(dbsession):
         id=get_id, ticker='AUD_JPY', price='M', granularity='M15',
         _from=d.strptime('2018-02-01 13:00:00', '%Y-%m-%d %H:%M:%S'),
         to=d.strptime('2018-04-30 13:00:00', '%Y-%m-%d %H:%M:%S'))
-    s = [SubTickerTask(get_id=get_id, _from=d.strptime(
+    s = [SubTickerTask(id=uuid4(), batch_id=get_id, _from=d.strptime(
                            '2018-02-01 13:00:00', '%Y-%m-%d %H:%M:%S'),
                        to=d.strptime(
                            '2018-03-01 12:45:00', '%Y-%m-%d %H:%M:%S')),
-         SubTickerTask(get_id=get_id, _from=d.strptime(
+         SubTickerTask(id=uuid4(), batch_id=get_id, _from=d.strptime(
                            '2018-03-01 13:00:00', '%Y-%m-%d %H:%M:%S'),
                        to=d.strptime(
                            '2018-04-01 12:45:00', '%Y-%m-%d %H:%M:%S')),
-         SubTickerTask(get_id=get_id, _from=d.strptime(
+         SubTickerTask(id=uuid4(), batch_id=get_id, _from=d.strptime(
                            '2018-04-01 13:00:00', '%Y-%m-%d %H:%M:%S'),
                        to=d.strptime(
                            '2018-04-30 13:00:00', '%Y-%m-%d %H:%M:%S'))]
@@ -92,14 +56,14 @@ def save_to_table(df, dbsession):
     """Generate and save data to candles table."""
     get_id = uuid4()
     g = GetTickerTask(
-        id=get_id, ticker='AUD_JPY', price='M', granularity='H1',
+        id=get_id, ticker='AUD_JPY', price='M', granularity='M15',
         _from=d.strptime('2018-02-01 13:00:00', '%Y-%m-%d %H:%M:%S'),
         to=d.strptime('2018-03-01 13:00:00', '%Y-%m-%d %H:%M:%S'))
     dbsession.add(g)
 
     data = df('AUD_JPY',
               {'from': '2018-02-01T13:00:00.000000000Z', 'smooth': True,
-               'to': '2018-03-01T13:00:00.000000000Z', 'granularity': 'H1',
+               'to': '2018-03-01T13:00:00.000000000Z', 'granularity': 'M15',
                'price': 'M'})
     data['batch_id'] = get_id
     data.reset_index(inplace=True)
@@ -140,3 +104,43 @@ def test_data_integrity(save_to_table, dbsession):
         np_data, columns=['timestamp', 'open', 'high', 'low', 'close'])
     df_og = save_to_table[1].drop('batch_id', axis=1).copy()
     pd.testing.assert_frame_equal(df_og, df_data)
+
+
+def test_candles_indicators_relationship(save_to_table, dbsession):
+    """Test indicators table functionality, relationship with candles table
+    and data integrity."""
+    data = save_to_table[1].drop('batch_id', axis=1)
+    ikh = indicator.Indicate(data, exp=6).ichimoku_kinko_hyo()
+    ikh['senkou_A'] = ikh['senkou_A'][:len(data)]
+    ikh['senkou_B'] = ikh['senkou_B'][:len(data)]
+    df = pd.DataFrame(ikh, index=data.timestamp)
+    df.reset_index(inplace=True)
+    df.rename(columns={'index': 'timestamp'}, inplace=True)
+    df['batch_id'] = save_to_table[0]
+    rows = df.to_dict('records')
+    for entry in rows:
+        entry['timestamp'] = entry['timestamp'].to_pydatetime()
+
+    dbsession.bulk_insert_mappings(Indicators, rows)
+    assert len(
+        dbsession.query(Indicators)
+        .filter_by(batch_id=save_to_table[0]).all()) == len(df)
+    tenkan = []
+    kijun = []
+    chikou = []
+    senkou_A = []
+    senkou_B = []
+    for row in dbsession.query(Candles).filter_by(batch_id=save_to_table[0])\
+            .all():
+        tenkan.append(row.indicators.tenkan)
+        kijun.append(row.indicators.kijun)
+        chikou.append(row.indicators.chikou)
+        senkou_A.append(row.indicators.senkou_A)
+        senkou_B.append(row.indicators.senkou_B)
+
+    np_ikh = np.stack((tenkan, kijun, chikou, senkou_A, senkou_B), axis=1)
+    df_ikh = pd.DataFrame(
+        np_ikh, columns=['tenkan', 'kijun', 'chikou', 'senkou_A', 'senkou_B'])
+    # print(df_ikh.tail())
+    df.drop(['timestamp', 'batch_id'], inplace=True, axis=1)
+    pd.testing.assert_frame_equal(df, df_ikh)

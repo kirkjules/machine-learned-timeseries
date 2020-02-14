@@ -4,6 +4,7 @@ iris_decision_tree
 .env
 config.yaml
 config.ini
+basic.html
 unittests/
 workshop/
 legacy_engine.py

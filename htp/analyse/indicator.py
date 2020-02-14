@@ -217,14 +217,18 @@ item with Series data.')
         BL = pd.Series(self.data["low"]).rolling(base).min().to_numpy()
         kijun = np.mean(np.stack([BH, BL], axis=1), axis=1)
 
-        chikou = np.roll(self.data["close"], -26)
+        chikou = np.append(
+            self.data["close"][26:], [np.nan for i in range(26)])
 
-        senkou_A = np.roll(
-            np.mean(np.stack([tenkan, kijun], axis=1), axis=1), 26)
+        senkou_A = np.append(
+            [np.nan for i in range(26)],
+            np.mean(np.stack([tenkan, kijun], axis=1), axis=1))
 
         H = pd.Series(self.data["high"]).rolling(lead).max().to_numpy()
         L = pd.Series(self.data["low"]).rolling(lead).min().to_numpy()
-        senkou_B = np.roll(np.mean(np.stack([H, L], axis=1), axis=1), 26)
+        senkou_B = np.append(
+            [np.nan for i in range(26)],
+            np.mean(np.stack([H, L], axis=1), axis=1))
 
         return {'tenkan': numpy_to_object_array(tenkan, self.exp),
                 'kijun': numpy_to_object_array(kijun, self.exp),

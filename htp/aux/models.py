@@ -6,7 +6,7 @@ from sqlalchemy.orm import relationship  # , backref
 from sqlalchemy.types import TypeDecorator, CHAR
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float,\
-        Boolean
+        Boolean, ForeignKeyConstraint
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
@@ -90,8 +90,9 @@ class GetTickerTask(Base):
 class SubTickerTask(Base):
     """Table to store sub query data arguments."""
     __tablename__ = 'sub_get_ticker'
+    # id = Column(GUID, primary_key=True, unique=True)
     id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
-    get_id = Column(GUID, ForeignKey("get_ticker.id"), unique=False)
+    batch_id = Column(GUID, ForeignKey("get_ticker.id"), unique=False)
     _from = Column(DateTime(), nullable=False)
     to = Column(DateTime(), nullable=False)
     status = Column(Integer)
@@ -101,21 +102,21 @@ class SubTickerTask(Base):
 class Candles(Base):
     """Table to store instrument timeseries data."""
     __tablename__ = 'candles'
-    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
-    batch_id = Column(GUID, ForeignKey("get_ticker.id"), unique=False)
-    timestamp = Column(DateTime())
+    # id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
+    batch_id = Column(
+        GUID, ForeignKey("get_ticker.id"), primary_key=True, unique=False)
+    timestamp = Column(DateTime(), primary_key=True, unique=False)
     open = Column(String(10))
     high = Column(String(10))
     low = Column(String(10))
     close = Column(String(10))
-    # ichimoku = relationship(
-    #     'Ichimoku', primaryjoin='and_(Candles.batch_id == Ichimoku.batch_id,'
-    #     'Candles.timestamp == Ichimoku.timestamp)')
+    indicators = relationship(
+        'Indicators', uselist=False, back_populates='candles')
 
 
 class IndicatorTask(Base):
     __tablename__ = 'indicator_task'
-    id = Column(
+    batch_id = Column(
         GUID, ForeignKey("get_ticker.id"), primary_key=True, unique=True)
     momentum = Column(Boolean())
     stochastic = Column(Boolean())
@@ -126,62 +127,27 @@ class IndicatorTask(Base):
     status = Column(Boolean())
 
 
-class Ichimoku(Base):
-    __tablename__ = 'ichimoku'
-    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
-    batch_id = Column(GUID, ForeignKey("get_ticker.id"), unique=False)
-    timestamp = Column(DateTime())
-    tenkan = Column(Float(precision=6))
-    kijun = Column(Float(precision=6))
-    chikou = Column(Float(precision=6))
-    senkou_A = Column(Float(precision=6))
-    senkou_B = Column(Float(precision=6))
-    iky_cat = Column(String(120))
-
-
-class Stochastic(Base):
-    __tablename__ = 'stochastic'
-    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
-    batch_id = Column(GUID, ForeignKey("get_ticker.id"), unique=False)
-    timestamp = Column(DateTime())
-    timestamp_shift = Column(DateTime())
-    percK = Column(Float(precision=6))
-    percD = Column(Float(precision=6))
-
-
-class relative_strength(Base):
-    __tablename__ = 'relative_strength'
-    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
-    batch_id = Column(GUID, ForeignKey("get_ticker.id"), unique=False)
-    timestamp = Column(DateTime())
-    timestamp_shift = Column(DateTime())
-    avg_gain = Column(Float(precision=6))
-    avg_loss = Column(Float(precision=6))
-    rs = Column(Float(precision=6))
-    rsi = Column(Float(precision=6))
-
-
-class momentum(Base):
-    __tablename__ = 'momentum'
-    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
-    batch_id = Column(GUID, ForeignKey("get_ticker.id"), unique=False)
-    timestamp = Column(DateTime())
-    timestamp_shift = Column(DateTime())
-    atr = Column(Float(precision=6))
-    adx = Column(Float(precision=6))
-
-
-class convergence_divergence(Base):
-    __tablename__ = 'convergence_divergence'
-    id = Column(Integer, primary_key=True, unique=True, autoincrement=True)
-    batch_id = Column(GUID, ForeignKey("get_ticker.id"), unique=False)
-    timestamp = Column(DateTime())
-    timestamp_shift = Column(DateTime())
-    emaF = Column(Float(precision=6))
-    emaS = Column(Float(precision=6))
-    macd = Column(Float(precision=6))
-    signal = Column(Float(precision=6))
-    histogram = Column(Float(precision=6))
+class Indicators(Base):
+    __tablename__ = 'indicators'
+    __table_args__ = (ForeignKeyConstraint(
+        ['batch_id', 'timestamp'], ['candles.batch_id', 'candles.timestamp']),)
+    batch_id = Column(GUID, primary_key=True, unique=False)
+    timestamp = Column(DateTime(), primary_key=True, unique=False)
+    tenkan = Column(String(20))
+    kijun = Column(String(20))
+    chikou = Column(String(20))
+    senkou_A = Column(String(20))
+    senkou_B = Column(String(20))
+    percK = Column(String(20))
+    percD = Column(String(20))
+    rsi = Column(String(20))
+    atr = Column(String(20))
+    adx = Column(String(20))
+    macd = Column(String(20))
+    signal = Column(String(20))
+    histogram = Column(String(20))
+    candles = relationship(
+        'Candles', uselist=False, back_populates='indicators')
 
 
 class moving_average(Base):
@@ -249,22 +215,6 @@ class Signals(Base):
     close_in_atr = Column(Integer)
     close_to_fast_by_atr = Column(Float(precision=6))
     close_to_slow_by_atr = Column(Float(precision=6))
-    target_percD = Column(Float(precision=6))
-    target_percK = Column(Float(precision=6))
-    target_rsi = Column(Float(precision=6))
-    target_macd = Column(Float(precision=6))
-    target_signal = Column(Float(precision=6))
-    target_histogram = Column(Float(precision=6))
-    target_adx = Column(Float(precision=6))
-    target_iky_cat = Column(String(120))
-    sup_percD = Column(Float(precision=6))
-    sup_percK = Column(Float(precision=6))
-    sup_rsi = Column(Float(precision=6))
-    sup_macd = Column(Float(precision=6))
-    sup_signal = Column(Float(precision=6))
-    sup_histogram = Column(Float(precision=6))
-    sup_adx = Column(Float(precision=6))
-    sup_iky_cat = Column(String(120))
 
 
 class Results(Base):
