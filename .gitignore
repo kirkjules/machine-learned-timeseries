@@ -5,6 +5,7 @@ iris_decision_tree
 config.yaml
 config.ini
 basic.html
+tutorial.html
 unittests/
 workshop/
 legacy_engine.py

@@ -82,14 +82,13 @@ def session_get_data(self, ticker, params={"count": 5, "price": "M"},
 
 @celery.task(ignore_result=True)
 def merge_data(results, ticker, price, granularity, task_id=None):
-    """Sort ticker data in chunks to designated lists matching the same ticker,
-    price and granularity to be respectively concetenated and bulk inserted
-    into the database."""
+    """Append dataframes into list to be concatenated, de-duplicated and bulk
+    inserted into the database."""
     dfs = []
     for result in results:
         if not isinstance(result[0], str):
             dfs.append(deepcopy(result[0]))
-        AsyncResult(result[3]).forget()
+        AsyncResult(result[1]).forget()
 
     if len(dfs) > 0:
         df = pd.concat(dfs)

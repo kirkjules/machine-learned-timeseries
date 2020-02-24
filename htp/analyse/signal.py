@@ -11,15 +11,15 @@ class Signals:
         """
 
         self.trade = trade
+        self.index = df.index
+        self.stop = abs(stop)
+        self.fast = df[fast].to_numpy()
+        self.slow = df[slow].to_numpy()
         self.close = df.close.to_numpy()
         self.entry = df.entry_open.to_numpy()
         self.exit = df.exit_open.to_numpy()
-        self.index = df.index
-        self.fast = df[fast].to_numpy()
-        self.slow = df[slow].to_numpy()
-        self.stop = abs(stop)
-        self.exit_high = df.exit_high.to_numpy()
         self.exit_low = df.exit_low.to_numpy()
+        self.exit_high = df.exit_high.to_numpy()
         self.atr = np.roll(df.atr.to_numpy(), 1)
         if trade == "buy":
             self.stop = -abs(stop)
@@ -76,7 +76,26 @@ class Signals:
         return s
 
     @classmethod
-    def atr_stop_signals(cls, *args, multiplier=6.0, **kwargs):
+    def system(cls, *args, **kwargs):
+        """Return a list of trades with corresponding entry timestamp and
+        price and exit timestamp and price, based off the raw signals
+        dataframe."""
+        base = cls(*args, **kwargs)
+        s = base.raw_signals
+        s.reset_index(inplace=True)
+        ind = s[s['entry_type'] == True].iloc[0].name
+        s.drop(list(range(ind)), axis=0, inplace=True)
+        entry = s.loc[s['entry_type'] == True, ['index', 'entry_price']]
+        exit_ = s.loc[s['exit_type'] == True, ['index', 'exit_price']]
+        entry.reset_index(drop=True, inplace=True)
+        entry.rename(columns={'index': 'entry_datetime'}, inplace=True)
+        exit_.reset_index(drop=True, inplace=True)
+        exit_.rename(columns={'index': 'exit_datetime'}, inplace=True)
+        tr = entry.merge(exit_, how='left', left_index=True, right_index=True)
+        return tr
+
+    @classmethod
+    def atr_stop(cls, *args, multiplier=6.0, **kwargs):
         base = cls(*args, **kwargs)
         en = base.raw_signals.entry_type.to_numpy()
         prev_close_1 = np.roll(base.close, 1)

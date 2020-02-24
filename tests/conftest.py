@@ -57,3 +57,13 @@ def df():
                           ).r.json(), queryParameters['price'])
 
     return _get
+
+
+@pytest.fixture
+def data(df):
+    ts = df(
+        'AUD_JPY',
+        {'from': '2018-02-01T13:00:00.000000000Z', 'smooth': True,
+         'to': '2018-06-01T13:00:00.000000000Z', 'granularity': 'H1',
+         'price': 'M'})
+    return ts

@@ -6,16 +6,6 @@ from htp.analyse import indicator
 # from memory_profiler import profile
 
 
-@pytest.fixture
-def data(df):
-    ts = df(
-        'AUD_JPY',
-        {'from': '2018-02-01T13:00:00.000000000Z', 'smooth': True,
-         'to': '2018-06-01T13:00:00.000000000Z', 'granularity': 'H1',
-         'price': 'M'})
-    return ts
-
-
 def test_sma_method(data):
     """Compare indicator.sma function to Tulipy library."""
     arr = data["close"].to_numpy(copy=True).astype(float)

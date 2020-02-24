@@ -1,5 +1,5 @@
 import numpy as np
-import pandas as pd
+# import pandas as pd
 
 
 def close_in_atr(close, atr):
@@ -40,14 +40,16 @@ def trend_convergence_divergence(**MACD):
 def trend_relative_strength_index(RSI):
     """Function to define a switch between an up or down trend in a financial
     timeseries based on the Relative Strength Index indicator."""
-    with np.nditer([RSI['rsi'], None]) as it:
+    with np.nditer([RSI['rsi'].astype(float), None]) as it:
         oversold = 0
         overbought = 0
         for x, y in it:
             if x > 70.:
                 overbought = 1
+                oversold = 0
                 y[...] = 0
             elif x < 30.:
+                overbought = 0
                 oversold = 1
                 y[...] = 0
             elif 70. > x > 50.:
@@ -62,8 +64,8 @@ def trend_relative_strength_index(RSI):
                 else:
                     overbought = 0
                     y[...] = -1
-            else:
-                y[...] = 0
+            # else:
+            #     y[...] = 0
         return it.operands[1]
 
 
