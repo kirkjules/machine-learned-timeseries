@@ -11,7 +11,7 @@ from htp.api import oanda
 from htp.toolbox import calculator
 from sqlalchemy import select, MetaData, Table
 from htp.aux.database import db_session, engine
-from htp.analyse import indicator, evaluate_fast, observe, machine_learn
+from htp.analyse import indicator, signal, observe, machine_learn
 from htp.aux.models import GetTickerTask, SubTickerTask, IndicatorTask,\
         GenSignalTask, Candles, moving_average, Signals, Results
 

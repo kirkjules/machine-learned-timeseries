@@ -115,6 +115,7 @@ class Candles(Base):
 
 
 class IndicatorTask(Base):
+    """Table to record indicator generation completed."""
     __tablename__ = 'indicator_task'
     batch_id = Column(
         GUID, ForeignKey("get_ticker.id"), primary_key=True, unique=True)
@@ -128,6 +129,7 @@ class IndicatorTask(Base):
 
 
 class Indicators(Base):
+    """Table to store indicator values."""
     __tablename__ = 'indicators'
     __table_args__ = (ForeignKeyConstraint(
         ['batch_id', 'timestamp'], ['candles.batch_id', 'candles.timestamp']),)

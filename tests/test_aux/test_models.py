@@ -34,15 +34,15 @@ def test_task_to_data_relationship(dbsession):
         id=get_id, ticker='AUD_JPY', price='M', granularity='M15',
         _from=d.strptime('2018-02-01 13:00:00', '%Y-%m-%d %H:%M:%S'),
         to=d.strptime('2018-04-30 13:00:00', '%Y-%m-%d %H:%M:%S'))
-    s = [SubTickerTask(id=uuid4(), batch_id=get_id, _from=d.strptime(
+    s = [SubTickerTask(batch_id=get_id, _from=d.strptime(
                            '2018-02-01 13:00:00', '%Y-%m-%d %H:%M:%S'),
                        to=d.strptime(
                            '2018-03-01 12:45:00', '%Y-%m-%d %H:%M:%S')),
-         SubTickerTask(id=uuid4(), batch_id=get_id, _from=d.strptime(
+         SubTickerTask(batch_id=get_id, _from=d.strptime(
                            '2018-03-01 13:00:00', '%Y-%m-%d %H:%M:%S'),
                        to=d.strptime(
                            '2018-04-01 12:45:00', '%Y-%m-%d %H:%M:%S')),
-         SubTickerTask(id=uuid4(), batch_id=get_id, _from=d.strptime(
+         SubTickerTask(batch_id=get_id, _from=d.strptime(
                            '2018-04-01 13:00:00', '%Y-%m-%d %H:%M:%S'),
                        to=d.strptime(
                            '2018-04-30 13:00:00', '%Y-%m-%d %H:%M:%S'))]

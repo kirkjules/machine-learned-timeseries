@@ -6,6 +6,7 @@ import sys
 import requests
 import pandas as pd
 from loguru import logger
+from pprint import pprint
 from htp.api import Api, exceptions
 
 logger.disable(__name__)
@@ -16,17 +17,17 @@ class Candles(Api):
     A request operation that queries the Oanda instrument.Candles endpoint for
     a given ticker's timeseries data.
 
-    The class inherits from Api, reading in API variables from a `.yaml`
-    configuration file which are required to complete a GET HTTP request to the
-    endpoint. A response object is initialised and, if the request is
-    successful will contain the target timeseries data. Data manipulation is
-    applied, as defined by class methods, to this object to yield differently
-    structured data sets.
+    The class inherits from Api, reading in relevant environment variables
+    which are required to complete a GET HTTP request to the endpoint. A
+    response object is initialised and, if the request is successful will
+    contain the target timeseries data. Data manipulation is applied, as
+    defined by class methods, to this object to yield differently structured
+    data sets.
 
     Parameters
     ----------
     kwargs : str
-        Any extra keyword arguments that is required for class functionality.
+        Arguments that specify endpoint parameter values.
 
     Attributes
     ---------
@@ -76,7 +77,7 @@ class Candles(Api):
     for parameter descriptions.
     Api behaviour will depend on Oanda releases. Notable mentions are:
 
-    * Parameters `from` and `to` set outside the datarange for what ticker
+    * Parameters `from` and `to` set outside the daterange for what ticker
       timeseries data is available will be handled by the endpoint by querying
       the closest possible datetime values. The exception is where the `to`
       paramater is in the future.
@@ -145,7 +146,7 @@ class Candles(Api):
 
 if __name__ == "__main__":
     """
-    python htp/api/oanda.py "AUD_JPY" "2018-06-25T16:00:00.000000000Z" 50 "M15"
+    python htp/api/oanda.py "AUD_JPY" "2018-06-25T16:00:00.000000000Z" 5 "M15"
     """
     logger.enable("__main__")
     logger.add(
@@ -153,4 +154,13 @@ if __name__ == "__main__":
     ticker = sys.argv[1]
     queryParameters = {
         "from": sys.argv[2], "count": sys.argv[3], "granularity": sys.argv[4]}
-    print(Candles(instrument=ticker, queryParameters=queryParameters).r.json())
+    data = Candles(instrument=ticker, queryParameters=queryParameters).r.json()
+    dic = {}
+    if 'candles' in data:
+        for candle in data['candles']:
+            dic[candle['time'].replace('.000000000Z', '').replace('T', ' ')] =\
+                    f"{candle['mid']['o']}, {candle['mid']['h']}"\
+                    f", {candle['mid']['l']}, {candle['mid']['c']}"
+    else:
+        dic = data
+    pprint(dic)
